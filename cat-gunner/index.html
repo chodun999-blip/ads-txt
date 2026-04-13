@@ -4,276 +4,137 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>개인정보처리방침 – Cat Gunner</title>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
-      --bg: #0d0f14;
-      --surface: #161921;
-      --border: #252933;
-      --accent: #f5c542;
-      --accent2: #e07b39;
-      --text: #d4d8e2;
-      --text-muted: #6b7385;
-      --text-bright: #f0f2f7;
-    }
-
     body {
-      background: var(--bg);
-      color: var(--text);
+      background: #ffffff;
+      color: #333333;
       font-family: 'Noto Sans KR', sans-serif;
       font-weight: 300;
       line-height: 1.8;
-      min-height: 100vh;
-    }
-
-    /* Background texture */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image:
-        radial-gradient(ellipse 80% 50% at 10% 20%, rgba(245,197,66,0.04) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 40% at 90% 80%, rgba(224,123,57,0.04) 0%, transparent 60%);
-      pointer-events: none;
-      z-index: 0;
     }
 
     .container {
-      position: relative;
-      z-index: 1;
-      max-width: 780px;
+      max-width: 720px;
       margin: 0 auto;
-      padding: 0 24px 80px;
+      padding: 60px 24px 80px;
     }
 
-    /* Header */
     header {
-      padding: 60px 0 48px;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 52px;
-    }
-
-    .app-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 6px 14px;
-      margin-bottom: 28px;
-      font-family: 'Space Mono', monospace;
-      font-size: 11px;
-      color: var(--accent);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .app-badge::before {
-      content: '🐱';
-      font-size: 14px;
+      margin-bottom: 48px;
+      padding-bottom: 24px;
+      border-bottom: 2px solid #111;
     }
 
     h1 {
-      font-family: 'Space Mono', monospace;
-      font-size: clamp(22px, 5vw, 32px);
+      font-size: 26px;
       font-weight: 700;
-      color: var(--text-bright);
-      letter-spacing: -0.02em;
-      margin-bottom: 12px;
-      line-height: 1.2;
-    }
-
-    h1 span {
-      color: var(--accent);
+      color: #111;
+      margin-bottom: 8px;
     }
 
     .meta {
-      display: flex;
-      gap: 24px;
       font-size: 13px;
-      color: var(--text-muted);
-      font-family: 'Space Mono', monospace;
-      flex-wrap: wrap;
+      color: #888;
     }
 
-    .meta span::before {
-      content: '// ';
-      color: var(--border);
-    }
-
-    /* Sections */
     section {
-      margin-bottom: 44px;
-      padding-bottom: 44px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    section:last-child {
-      border-bottom: none;
+      margin-bottom: 36px;
     }
 
     h2 {
-      font-family: 'Space Mono', monospace;
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--accent);
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      margin-bottom: 16px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    h2::before {
-      content: '';
-      display: block;
-      width: 20px;
-      height: 2px;
-      background: var(--accent);
-      flex-shrink: 0;
-    }
-
-    h3 {
       font-size: 15px;
-      font-weight: 500;
-      color: var(--text-bright);
-      margin: 20px 0 8px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #e5e5e5;
     }
 
     p {
-      font-size: 14.5px;
-      margin-bottom: 14px;
-      color: var(--text);
+      font-size: 14px;
+      color: #444;
+      margin-bottom: 12px;
     }
 
     p:last-child { margin-bottom: 0; }
 
     ul {
       list-style: none;
-      margin: 10px 0 14px;
+      margin: 8px 0 12px;
+      padding-left: 4px;
     }
 
     ul li {
-      font-size: 14.5px;
-      padding: 7px 0 7px 20px;
+      font-size: 14px;
+      color: #444;
+      padding: 4px 0 4px 16px;
       position: relative;
-      color: var(--text);
-      border-bottom: 1px solid rgba(255,255,255,0.03);
     }
-
-    ul li:last-child { border-bottom: none; }
 
     ul li::before {
-      content: '→';
+      content: '·';
       position: absolute;
-      left: 0;
-      color: var(--accent2);
-      font-size: 12px;
-      top: 9px;
+      left: 4px;
+      color: #aaa;
     }
 
-    /* Info card */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-left: 3px solid var(--accent);
-      border-radius: 6px;
-      padding: 20px 24px;
-      margin: 16px 0;
-    }
-
-    .card p { font-size: 14px; }
-
-    /* Third-party table */
     .third-party-list {
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      margin: 16px 0;
+      gap: 8px;
+      margin: 12px 0;
     }
 
     .third-party-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 14px 20px;
-      gap: 16px;
-      flex-wrap: wrap;
+      padding: 10px 14px;
+      background: #f8f8f8;
+      border-radius: 4px;
+      gap: 12px;
     }
 
     .third-party-item .name {
-      font-weight: 500;
-      color: var(--text-bright);
       font-size: 14px;
+      color: #333;
     }
 
     .third-party-item a {
-      font-family: 'Space Mono', monospace;
-      font-size: 11px;
-      color: var(--accent);
-      text-decoration: none;
-      border-bottom: 1px solid rgba(245,197,66,0.3);
-      transition: border-color 0.2s;
+      font-size: 13px;
+      color: #555;
+      text-decoration: underline;
     }
 
-    .third-party-item a:hover {
-      border-color: var(--accent);
-    }
-
-    /* Contact */
     .contact-box {
-      background: linear-gradient(135deg, rgba(245,197,66,0.06) 0%, rgba(224,123,57,0.06) 100%);
-      border: 1px solid rgba(245,197,66,0.2);
-      border-radius: 8px;
-      padding: 28px 32px;
-      margin-top: 16px;
+      background: #f8f8f8;
+      border-radius: 4px;
+      padding: 20px;
+      margin-top: 12px;
     }
 
-    .contact-box p {
-      margin-bottom: 12px;
-      font-size: 14px;
-    }
+    .contact-box p { margin-bottom: 6px; }
 
     .contact-box a {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--accent);
-      text-decoration: none;
-      font-family: 'Space Mono', monospace;
       font-size: 14px;
-      font-weight: 700;
-      transition: opacity 0.2s;
+      color: #333;
     }
 
-    .contact-box a:hover { opacity: 0.7; }
-
-    /* Footer */
     footer {
-      text-align: center;
-      padding-top: 40px;
+      margin-top: 48px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e5e5;
       font-size: 12px;
-      color: var(--text-muted);
-      font-family: 'Space Mono', monospace;
-      border-top: 1px solid var(--border);
-      margin-top: 20px;
-    }
-
-    footer strong {
-      color: var(--accent);
+      color: #aaa;
+      text-align: center;
     }
 
     @media (max-width: 480px) {
-      header { padding: 40px 0 36px; }
-      .meta { flex-direction: column; gap: 6px; }
-      .contact-box { padding: 20px; }
+      .container { padding: 40px 20px 60px; }
+      h1 { font-size: 22px; }
     }
   </style>
 </head>
@@ -281,49 +142,30 @@
 <div class="container">
 
   <header>
-    <div class="app-badge">Cat Gunner</div>
-    <h1>개인정보<span>처리방침</span></h1>
-    <div class="meta">
-      <span>시행일: 2026-04-13</span>
-      <span>서비스 제공자: Suwon Yoo</span>
-    </div>
+    <h1>개인정보처리방침</h1>
+    <p class="meta">Cat Gunner · 시행일: 2026-04-13</p>
   </header>
 
   <section>
     <h2>개요</h2>
-    <p>
-      본 개인정보처리방침은 Suwon Yoo(이하 "서비스 제공자")가 무료 서비스로 개발한
-      모바일 애플리케이션 <strong>Cat Gunner</strong>(이하 "앱")에 적용됩니다.
-    </p>
-    <p>
-      앱을 다운로드하거나 사용함으로써 본 방침에 동의하는 것으로 간주됩니다.
-      앱을 사용하기 전에 본 방침을 충분히 읽고 이해하시기 바랍니다.
-    </p>
+    <p>본 개인정보처리방침은 Chodun(이하 "서비스 제공자")이 무료 서비스로 개발한 모바일 애플리케이션 <strong>Cat Gunner</strong>(이하 "앱")에 적용됩니다.</p>
+    <p>앱을 다운로드하거나 사용함으로써 본 방침에 동의하는 것으로 간주됩니다. 앱을 사용하기 전에 본 방침을 충분히 읽고 이해하시기 바랍니다.</p>
   </section>
 
   <section>
     <h2>수집하는 정보</h2>
-    <p>앱을 다운로드하고 사용하는 과정에서 아래와 같은 정보가 수집될 수 있습니다.</p>
-
-    <h3>자동으로 수집되는 정보</h3>
+    <p>앱을 사용하는 과정에서 아래와 같은 정보가 자동으로 수집될 수 있습니다.</p>
     <ul>
       <li>기기의 IP 주소</li>
       <li>방문한 앱 내 페이지, 방문 일시 및 시간</li>
       <li>앱 이용 시간</li>
       <li>모바일 기기 운영체제</li>
     </ul>
-
-    <div class="card">
-      <p>
-        📋 앱은 사용자가 직접 제공하는 개인정보를 수집하지 않습니다.
-        단, 앱이 정상적으로 작동하기 위해 일부 기기 정보를 자동으로 수집할 수 있습니다.
-      </p>
-    </div>
+    <p>앱은 사용자가 직접 입력하는 개인정보를 수집하지 않습니다.</p>
   </section>
 
   <section>
     <h2>정보의 이용 목적</h2>
-    <p>수집된 정보는 아래 목적으로만 활용됩니다.</p>
     <ul>
       <li>앱 서비스의 제공 및 유지·관리</li>
       <li>앱 성능 및 사용자 경험 개선</li>
@@ -334,85 +176,55 @@
 
   <section>
     <h2>제3자 서비스</h2>
-    <p>
-      앱은 아래 제3자 서비스를 사용하며, 각 서비스는 자체 개인정보처리방침에 따라
-      정보를 처리할 수 있습니다.
-    </p>
+    <p>앱은 아래 제3자 서비스를 사용하며, 각 서비스는 자체 개인정보처리방침에 따라 정보를 처리할 수 있습니다.</p>
     <div class="third-party-list">
       <div class="third-party-item">
         <span class="name">Google Play Services</span>
-        <a href="https://www.google.com/policies/privacy/" target="_blank" rel="noopener">방침 보기 ↗</a>
+        <a href="https://www.google.com/policies/privacy/" target="_blank" rel="noopener">방침 보기</a>
       </div>
       <div class="third-party-item">
         <span class="name">AdMob (Google)</span>
-        <a href="https://support.google.com/admob/answer/6128543" target="_blank" rel="noopener">방침 보기 ↗</a>
+        <a href="https://support.google.com/admob/answer/6128543" target="_blank" rel="noopener">방침 보기</a>
       </div>
       <div class="third-party-item">
         <span class="name">Unity</span>
-        <a href="https://unity.com/legal/privacy-policy" target="_blank" rel="noopener">방침 보기 ↗</a>
+        <a href="https://unity.com/legal/privacy-policy" target="_blank" rel="noopener">방침 보기</a>
       </div>
     </div>
-    <p>
-      서비스 제공자는 이러한 제3자 서비스의 개인정보 처리 방식에 대해 책임을 지지 않습니다.
-    </p>
+    <p>서비스 제공자는 이러한 제3자 서비스의 개인정보 처리 방식에 대해 책임을 지지 않습니다.</p>
   </section>
 
   <section>
     <h2>개인정보의 보관 및 삭제</h2>
-    <p>
-      서비스 제공자는 수집된 개인정보를 앱 서비스 제공에 필요한 기간 동안 보관합니다.
-    </p>
-    <p>
-      개인정보 삭제를 원하시는 경우 아래 연락처로 요청하시면
-      합리적인 기간 내에 처리해 드리겠습니다.
-    </p>
+    <p>서비스 제공자는 수집된 개인정보를 앱 서비스 제공에 필요한 기간 동안 보관합니다. 개인정보 삭제를 원하시는 경우 아래 연락처로 요청하시면 합리적인 기간 내에 처리해 드리겠습니다.</p>
   </section>
 
   <section>
     <h2>아동 개인정보 보호</h2>
-    <div class="card">
-      <p>
-        앱은 만 13세 미만 아동을 대상으로 개인정보를 의도적으로 수집하지 않습니다.
-        만 13세 미만 아동이 개인정보를 제공한 것으로 확인될 경우,
-        서비스 제공자는 해당 정보를 즉시 삭제합니다.
-        보호자로서 자녀가 개인정보를 제공했다고 생각되시면 연락해 주시기 바랍니다.
-      </p>
-    </div>
+    <p>앱은 만 13세 미만 아동을 대상으로 개인정보를 의도적으로 수집하지 않습니다. 만 13세 미만 아동이 개인정보를 제공한 것으로 확인될 경우 즉시 삭제합니다. 보호자로서 자녀가 개인정보를 제공했다고 생각되시면 아래 연락처로 문의해 주세요.</p>
   </section>
 
   <section>
     <h2>보안</h2>
-    <p>
-      서비스 제공자는 사용자의 개인정보를 보호하기 위해 적절한 보안 조치를 취하고 있습니다.
-      그러나 인터넷을 통한 데이터 전송 또는 전자 저장 방식은 100% 안전하지 않을 수 있으며,
-      완전한 보안을 보장하기 어렵습니다.
-    </p>
-    <p>
-      또한 스마트폰의 탈옥(Jailbreak) 또는 루팅(Rooting)은 기기 보안을 취약하게 만들고
-      앱의 정상적인 작동을 방해할 수 있으므로 강력히 권고하지 않습니다.
-    </p>
+    <p>서비스 제공자는 사용자의 개인정보를 보호하기 위해 적절한 보안 조치를 취하고 있습니다. 다만 인터넷을 통한 데이터 전송은 완전한 보안을 보장하기 어렵습니다.</p>
+    <p>스마트폰의 탈옥(Jailbreak) 또는 루팅(Rooting)은 기기 보안을 취약하게 만들고 앱의 정상 작동을 방해할 수 있으므로 권고하지 않습니다.</p>
   </section>
 
   <section>
     <h2>방침 변경</h2>
-    <p>
-      본 개인정보처리방침은 필요에 따라 수시로 업데이트될 수 있습니다.
-      변경 사항은 본 페이지에 게시되며, 계속적인 앱 이용은 변경 사항에 대한 동의로 간주됩니다.
-    </p>
-    <p>정기적으로 본 페이지를 확인하시기 바랍니다.</p>
+    <p>본 개인정보처리방침은 필요에 따라 업데이트될 수 있습니다. 변경 사항은 본 페이지에 게시되며, 계속적인 앱 이용은 변경 사항에 대한 동의로 간주됩니다.</p>
   </section>
 
   <section>
     <h2>문의하기</h2>
-    <p>개인정보처리방침에 관한 문의나 개인정보 삭제 요청은 아래 이메일로 연락해 주세요.</p>
     <div class="contact-box">
-      <p>서비스 제공자: <strong>Suwon Yoo</strong></p>
-      <a href="mailto:Chodun999@gmail.com">✉ Chodun999@gmail.com</a>
+      <p>서비스 제공자: <strong>Chodun</strong></p>
+      <p>이메일: <a href="mailto:Chodun999@gmail.com">Chodun999@gmail.com</a></p>
     </div>
   </section>
 
   <footer>
-    <p>© 2026 <strong>Cat Gunner</strong> · Suwon Yoo · 시행일 2026-04-13</p>
+    <p>© 2026 Cat Gunner · Chodun · 시행일 2026-04-13</p>
   </footer>
 
 </div>
