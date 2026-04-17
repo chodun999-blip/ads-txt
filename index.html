@@ -1,5 +1,339 @@
 <!doctype html>
-<html>
-  <head><meta charset="utf-8"><title>chodun.kr</title></head>
-  <body>OK</body>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Chodun · 모바일 캐주얼 게임 스튜디오</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Chodun — 모바일 캐주얼 게임을 만드는 인디 게임 스튜디오">
+<meta property="og:title" content="Chodun">
+<meta property="og:description" content="모바일 캐주얼 게임을 만드는 인디 게임 스튜디오">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0a08;
+    --surface:#161411;
+    --surface-2:#1f1c18;
+    --text:#f4efe4;
+    --text-muted:#8a847a;
+    --text-dim:#5a554d;
+    --accent:#f5a524;
+    --accent-soft:#fbbf24;
+    --border:#2a2621;
+    --max:1120px;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:'IBM Plex Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;
+    background:var(--bg);color:var(--text);
+    font-weight:400;line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;position:relative;min-height:100vh;
+  }
+  body::before{
+    content:'';position:fixed;inset:0;
+    pointer-events:none;z-index:1;opacity:.035;
+    background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  body::after{
+    content:'';position:fixed;inset:0;
+    pointer-events:none;z-index:0;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(245,165,36,.06), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(180,83,9,.04), transparent 60%);
+  }
+
+  nav{
+    position:sticky;top:0;z-index:50;
+    backdrop-filter:blur(14px);
+    background:rgba(11,10,8,.72);
+    border-bottom:1px solid var(--border);
+  }
+  .nav-inner{
+    max-width:var(--max);margin:0 auto;
+    padding:1.15rem 1.75rem;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .logo{
+    display:flex;align-items:center;gap:.65rem;
+    text-decoration:none;color:var(--text);
+    font-family:'Black Han Sans',sans-serif;
+    font-size:1.35rem;letter-spacing:.08em;
+  }
+  .mark{
+    width:22px;height:22px;
+    background:linear-gradient(135deg,var(--accent-soft) 0%,var(--accent) 100%);
+    clip-path:polygon(25% 0%,75% 0%,100% 40%,50% 100%,0% 40%);
+    filter:drop-shadow(0 0 8px rgba(245,165,36,.4));
+  }
+  .nav-links{display:flex;gap:2rem}
+  .nav-links a{
+    color:var(--text-muted);text-decoration:none;
+    font-size:.92rem;letter-spacing:.02em;transition:color .2s;
+  }
+  .nav-links a:hover{color:var(--accent)}
+
+  .hero{
+    max-width:var(--max);margin:0 auto;
+    padding:7rem 1.75rem 5rem;
+    position:relative;z-index:2;
+  }
+  .label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:.78rem;color:var(--accent);
+    letter-spacing:.25em;text-transform:uppercase;
+    margin-bottom:2.25rem;
+    display:flex;align-items:center;gap:.65rem;
+  }
+  .label::before{content:'';width:28px;height:1px;background:var(--accent)}
+  .hero h1{
+    font-family:'Black Han Sans',sans-serif;
+    font-size:clamp(3.75rem,13vw,10rem);
+    line-height:.88;letter-spacing:-.025em;
+    margin-bottom:2rem;font-weight:400;
+  }
+  .hero h1 .accent{
+    color:var(--accent);position:relative;display:inline-block;
+  }
+  .hero h1 .accent::after{
+    content:'';position:absolute;left:0;right:0;bottom:.08em;
+    height:.15em;background:var(--accent);opacity:.15;
+    transform:skew(-6deg);
+  }
+  .hero-sub{
+    font-size:clamp(1rem,1.5vw,1.15rem);
+    color:var(--text-muted);
+    max-width:520px;line-height:1.75;
+  }
+  .hero-sub strong{color:var(--text);font-weight:500}
+
+  .section{
+    max-width:var(--max);margin:0 auto;
+    padding:5rem 1.75rem;
+    position:relative;z-index:2;
+  }
+  .section-head{
+    display:flex;align-items:baseline;justify-content:space-between;
+    margin-bottom:2.5rem;flex-wrap:wrap;gap:1rem;
+    padding-top:2rem;border-top:1px solid var(--border);
+  }
+  .section-title{
+    font-family:'Black Han Sans',sans-serif;
+    font-size:clamp(2.25rem,4.5vw,3.25rem);
+    line-height:1;letter-spacing:-.015em;font-weight:400;
+  }
+  .section-meta{
+    font-family:'JetBrains Mono',monospace;
+    color:var(--text-dim);font-size:.8rem;letter-spacing:.15em;
+  }
+
+  .games{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(240px,1fr));
+    gap:1.25rem;
+  }
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    padding:1.75rem;text-decoration:none;color:var(--text);
+    display:flex;flex-direction:column;gap:1.25rem;
+    position:relative;overflow:hidden;
+    transition:transform .35s cubic-bezier(.4,0,.2,1),
+               border-color .35s,background .35s;
+  }
+  .card::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);
+    transform:translateX(-100%);transition:transform .6s ease;
+  }
+  .card:hover::before{transform:translateX(100%)}
+  .card:hover{
+    transform:translateY(-4px);
+    border-color:rgba(245,165,36,.5);
+    background:var(--surface-2);
+  }
+  .card-arrow{
+    position:absolute;top:1.5rem;right:1.5rem;
+    color:var(--text-dim);font-size:1.1rem;
+    transition:color .3s,transform .3s;
+  }
+  .card:hover .card-arrow{color:var(--accent);transform:translate(4px,-4px)}
+  .card-icon{
+    width:72px;height:72px;border-radius:16px;
+    border:1px solid var(--border);background:var(--bg);
+  }
+  .card-title{
+    font-size:1.05rem;font-weight:600;line-height:1.35;letter-spacing:-.01em;
+  }
+  .card-sub{
+    font-family:'JetBrains Mono',monospace;
+    color:var(--text-muted);font-size:.78rem;
+    letter-spacing:.08em;margin-top:auto;
+  }
+
+  .contact-grid{
+    display:grid;grid-template-columns:1.1fr 1fr;gap:3rem;align-items:start;
+  }
+  .contact-card{
+    background:var(--surface);border:1px solid var(--border);
+    padding:2.25rem;position:relative;
+  }
+  .contact-card::before{
+    content:'◆';position:absolute;top:1.25rem;right:1.5rem;
+    color:var(--accent);opacity:.3;font-size:1rem;
+  }
+  .contact-lbl{
+    font-family:'JetBrains Mono',monospace;
+    color:var(--text-muted);font-size:.75rem;
+    text-transform:uppercase;letter-spacing:.2em;margin-bottom:.75rem;
+  }
+  .contact-val{
+    font-family:'Black Han Sans',sans-serif;
+    font-size:clamp(1.1rem,2.5vw,1.6rem);
+    color:var(--text);text-decoration:none;
+    word-break:break-all;transition:color .2s;
+    display:block;margin-bottom:1.5rem;font-weight:400;
+  }
+  .contact-val:hover{color:var(--accent)}
+  .btn{
+    display:inline-flex;align-items:center;gap:.6rem;
+    padding:.9rem 1.5rem;background:var(--accent);color:var(--bg);
+    text-decoration:none;font-weight:600;font-size:.92rem;
+    letter-spacing:.01em;
+    transition:background .2s,transform .2s;
+    border:1px solid var(--accent);
+  }
+  .btn:hover{background:var(--accent-soft);transform:translateY(-2px)}
+  .btn-ghost{
+    background:transparent;color:var(--accent);
+    border:1px solid var(--border);margin-left:.5rem;
+  }
+  .btn-ghost:hover{
+    background:rgba(245,165,36,.08);
+    border-color:var(--accent);transform:translateY(-2px);
+  }
+
+  footer{
+    border-top:1px solid var(--border);
+    padding:2.5rem 1.75rem;position:relative;z-index:2;
+  }
+  .foot-inner{
+    max-width:var(--max);margin:0 auto;
+    display:flex;justify-content:space-between;
+    align-items:center;flex-wrap:wrap;gap:1rem;
+    font-family:'JetBrains Mono',monospace;
+    font-size:.78rem;color:var(--text-dim);letter-spacing:.08em;
+  }
+  .foot-inner a{color:var(--text-muted);text-decoration:none}
+  .foot-inner a:hover{color:var(--accent)}
+
+  @media (max-width:720px){
+    .contact-grid{grid-template-columns:1fr;gap:2rem}
+    .nav-links{gap:1.25rem}
+    .hero{padding:4rem 1.5rem 3rem}
+    .section{padding:3.5rem 1.5rem}
+  }
+
+  @keyframes rise{
+    from{opacity:0;transform:translateY(20px)}
+    to{opacity:1;transform:translateY(0)}
+  }
+  .rise{animation:rise .9s cubic-bezier(.2,.8,.2,1) both}
+  .d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.3s}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="#" class="logo"><span class="mark"></span>CHODUN</a>
+    <div class="nav-links">
+      <a href="#games">Games</a>
+      <a href="#contact">Contact</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="label rise d1">Indie Game Studio</div>
+  <h1 class="rise d2">
+    중독성 있는,<br>
+    <span class="accent">캐쥬얼 게임</span>
+  </h1>
+  <p class="hero-sub rise d3">
+    <strong>Chodun</strong>은 모바일 캐주얼 게임을 만드는 인디 게임 스튜디오입니다.
+    누구나 부담 없이 꺼내 즐길 수 있는, 가벼운 재미를 만들고 있습니다.
+  </p>
+</section>
+
+<section class="section" id="games">
+  <div class="section-head">
+    <h2 class="section-title">Games</h2>
+    <span class="section-meta">[ 04 TITLES · GOOGLE PLAY ]</span>
+  </div>
+  <div class="games">
+
+    <a class="card" href="https://play.google.com/store/apps/details?id=com.Chodun.IdleTank" target="_blank" rel="noopener">
+      <span class="card-arrow">↗</span>
+      <img class="card-icon" src="https://play-lh.googleusercontent.com/rNBQ4b8vDi4Am-RDgNxPVZOSxo6R7NfP4MXrJROg4u8MKx520f5cI2XfFEDB1-oJH7Y=s256" alt="광산탱크 키우기 아이콘" loading="lazy">
+      <div class="card-title">광산탱크 키우기</div>
+      <div class="card-sub">GOOGLE PLAY ↗</div>
+    </a>
+
+    <a class="card" href="https://play.google.com/store/apps/details?id=com.Chodun.MiningTank" target="_blank" rel="noopener">
+      <span class="card-arrow">↗</span>
+      <img class="card-icon" src="https://play-lh.googleusercontent.com/QyYivQi-1sKtcWExTPYqe4vRJWanN_Y76k8EibEoKJ5Rz6jB9ZssOheCMNxBTTEMmQ=s256" alt="탱크 키우기 아이콘" loading="lazy">
+      <div class="card-title">탱크 키우기</div>
+      <div class="card-sub">GOOGLE PLAY ↗</div>
+    </a>
+
+    <a class="card" href="https://play.google.com/store/apps/details?id=com.Chodun.TankMiner" target="_blank" rel="noopener">
+      <span class="card-arrow">↗</span>
+      <img class="card-icon" src="https://play-lh.googleusercontent.com/OqfMTApKYwGkBnFnsjqN6J97aTZpqVJ-7dFIpPRiCzN3OKPULPxv61NbZdyvoskBU-w=s256" alt="탱크로 보석캐기 아이콘" loading="lazy">
+      <div class="card-title">탱크로 보석캐기</div>
+      <div class="card-sub">GOOGLE PLAY ↗</div>
+    </a>
+
+    <a class="card" href="https://play.google.com/store/apps/details?id=com.Chodun.SpaceMiner" target="_blank" rel="noopener">
+      <span class="card-arrow">↗</span>
+      <img class="card-icon" src="https://play-lh.googleusercontent.com/J1Y9i6YPW0fqyxx0dqBvlr_yBgBPyThSNeJSsZByrXKqOgYJAdOk3nNBcV9hxs_NETaY=s256" alt="우주광부 키우기 아이콘" loading="lazy">
+      <div class="card-title">우주광부 키우기</div>
+      <div class="card-sub">GOOGLE PLAY ↗</div>
+    </a>
+
+  </div>
+</section>
+
+<section class="section" id="contact">
+  <div class="section-head">
+    <h2 class="section-title">Contact</h2>
+    <span class="section-meta">[ EMAIL · FEEDBACK · BUSINESS ]</span>
+  </div>
+  <div class="contact-grid">
+    <div>
+      <p style="color:var(--text-muted);line-height:1.75;max-width:460px;font-size:1rem">
+        게임 관련 문의, 버그 제보, 피드백, 협업 제안은 언제든 환영합니다.
+        받은 메일은 꼭 읽고 답장드립니다.
+      </p>
+    </div>
+    <div class="contact-card">
+      <div class="contact-lbl">✉ Email</div>
+      <a class="contact-val" href="mailto:Chodun999@gmail.com">Chodun999@gmail.com</a>
+      <a class="btn" href="mailto:Chodun999@gmail.com">메일 보내기 →</a>
+      <a class="btn btn-ghost" href="https://play.google.com/store/apps/dev?id=8021191570593161550" target="_blank" rel="noopener">Play Store</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="foot-inner">
+    <div>© 2026 CHODUN · ALL RIGHTS RESERVED</div>
+    <div>chodun.kr</div>
+  </div>
+</footer>
+
+</body>
 </html>
