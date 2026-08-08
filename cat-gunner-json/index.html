@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cat Gunner 세이브 데이터 뷰어</title>
+<style>
+  :root{
+    --bg:#F3F4F7; --card:#FFFFFF; --ink:#22262E; --sub:#6B7280;
+    --line:#E4E6EB; --accent:#E8890C; --accent-soft:#FFF3E0;
+    --ok:#16A34A; --ok-soft:#EAF7EF; --no:#9CA3AF; --no-soft:#F1F2F4;
+    --danger:#DC2626; --danger-soft:#FDECEC;
+    --vip:#7C3AED; --vip-soft:#F1EAFD; --lux:#B45309; --lux-soft:#FBF1DE;
+    --mono:"SF Mono","Cascadia Mono","Consolas",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+    font-size:14px; line-height:1.5; padding:24px 16px 80px;
+  }
+  .wrap{max-width:1080px; margin:0 auto;}
+
+  /* ── 헤더 / 입력 ── */
+  header{display:flex; align-items:baseline; gap:10px; margin-bottom:14px;}
+  header h1{font-size:20px; font-weight:800; letter-spacing:-.02em;}
+  header .tag{font-size:12px; color:var(--sub); font-weight:600;}
+  .input-card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:16px; margin-bottom:20px;
+  }
+  textarea{
+    width:100%; min-height:110px; resize:vertical;
+    border:1px solid var(--line); border-radius:8px; padding:10px 12px;
+    font-family:var(--mono); font-size:12px; color:var(--ink);
+    background:#FAFBFC;
+  }
+  textarea:focus{outline:2px solid var(--accent); outline-offset:-1px;}
+  .input-row{display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;}
+  button.primary{
+    background:var(--accent); color:#fff; border:none; border-radius:8px;
+    padding:9px 22px; font-size:14px; font-weight:700; cursor:pointer;
+  }
+  button.primary:hover{filter:brightness(1.06);}
+  button.ghost{
+    background:none; border:1px solid var(--line); border-radius:8px;
+    padding:9px 14px; font-size:13px; color:var(--sub); cursor:pointer;
+  }
+  button.ghost:hover{border-color:var(--sub);}
+  #decode-note{font-size:12px; color:var(--sub);}
+  #error-box{
+    display:none; margin-top:10px; background:var(--danger-soft); color:var(--danger);
+    border-radius:8px; padding:10px 12px; font-size:13px; font-weight:600;
+  }
+
+  /* ── 요약 배지 스트립 ── */
+  #summary-strip{display:none; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
+  .badge{
+    display:inline-flex; align-items:center; gap:6px;
+    border-radius:999px; padding:6px 14px; font-size:13px; font-weight:700;
+    background:var(--no-soft); color:var(--no);
+  }
+  .badge .dot{width:8px; height:8px; border-radius:50%; background:currentColor;}
+  .badge.on-ok{background:var(--ok-soft); color:var(--ok);}
+  .badge.on-danger{background:var(--danger-soft); color:var(--danger);}
+  .badge.on-vip{background:var(--vip-soft); color:var(--vip);}
+  .badge.on-lux{background:var(--lux-soft); color:var(--lux);}
+  .badge.on-accent{background:var(--accent-soft); color:var(--accent);}
+
+  /* ── 카드 그리드 ── */
+  #result{display:none;}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px;}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:16px 18px;
+  }
+  .card.wide{grid-column:1 / -1;}
+  .card h2{
+    font-size:13px; font-weight:800; letter-spacing:.02em; color:var(--sub);
+    text-transform:uppercase; margin-bottom:12px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .card h2::before{content:""; width:4px; height:14px; border-radius:2px; background:var(--accent);}
+  .kv{display:grid; grid-template-columns:minmax(110px,42%) 1fr; row-gap:7px; column-gap:12px;}
+  .kv .k{color:var(--sub); font-size:13px;}
+  .kv .v{font-family:var(--mono); font-size:13px; word-break:break-all;}
+  .kv .v.plain{font-family:inherit; font-size:13px;}
+  .yes{color:var(--ok); font-weight:700; font-family:inherit;}
+  .no-v{color:var(--no); font-family:inherit;}
+  .warn-v{color:var(--danger); font-weight:800; font-family:inherit;}
+  .muted{color:var(--sub);}
+  .sub-note{font-size:11px; color:var(--sub); font-family:inherit;}
+
+  /* 구매 패키지 표 */
+  table.pack{width:100%; border-collapse:collapse; font-size:13px;}
+  table.pack td{padding:6px 4px; border-bottom:1px solid var(--line);}
+  table.pack tr:last-child td{border-bottom:none;}
+  table.pack td:last-child{text-align:right;}
+
+  /* 트랜잭션 목록 */
+  details{margin-top:10px;}
+  details summary{cursor:pointer; font-size:13px; font-weight:700; color:var(--sub);}
+  .txn-list{
+    margin-top:8px; max-height:220px; overflow:auto; background:#FAFBFC;
+    border:1px solid var(--line); border-radius:8px; padding:8px 12px;
+    font-family:var(--mono); font-size:11px; line-height:1.8; word-break:break-all;
+  }
+  pre.raw{
+    margin-top:8px; max-height:420px; overflow:auto; background:#FAFBFC;
+    border:1px solid var(--line); border-radius:8px; padding:12px;
+    font-family:var(--mono); font-size:11px; line-height:1.6;
+  }
+  .pw-btn{
+    border:none; background:var(--no-soft); color:var(--sub); border-radius:6px;
+    padding:2px 8px; font-size:11px; cursor:pointer; margin-left:6px;
+  }
+  @media (max-width:640px){ .kv{grid-template-columns:1fr;} .kv .k{margin-top:4px;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Cat Gunner 세이브 데이터 뷰어</h1>
+  </header>
+
+  <div class="input-card">
+    <textarea id="input" placeholder="세이브 데이터(JSON 또는 Base64 문자열)를 그대로 붙여넣으세요."></textarea>
+    <div class="input-row">
+      <button class="primary" onclick="analyze()">분석하기</button>
+      <button class="ghost" onclick="clearAll()">초기화</button>
+      <span id="decode-note"></span>
+    </div>
+    <div id="error-box"></div>
+  </div>
+
+  <div id="summary-strip"></div>
+
+  <div id="result">
+    <div class="grid" id="grid"></div>
+    <div class="card wide" style="margin-top:14px;">
+      <h2>원본 JSON</h2>
+      <details><summary>전체 데이터 펼치기</summary><pre class="raw" id="raw-json"></pre></details>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ───────────────── 디코딩 ───────────────── */
+function b64ToUtf8(s){
+  const bin = atob(s);
+  const bytes = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return new TextDecoder("utf-8").decode(bytes);
+}
+function tryParseJson(s){
+  try{ const o = JSON.parse(s); return (o && typeof o === "object") ? o : null; }
+  catch(e){ return null; }
+}
+// 순수 JSON → URL디코드 → Base64 → URL디코드 후 Base64 순으로 시도
+function decodeInput(rawInput){
+  let s = rawInput.trim();
+  let o = tryParseJson(s);
+  if(o) return {data:o, how:"JSON 원문"};
+
+  try{
+    const u = decodeURIComponent(s);
+    o = tryParseJson(u);
+    if(o) return {data:o, how:"URL 인코딩 해제 → JSON"};
+    s = /%[0-9A-Fa-f]{2}/.test(rawInput) ? u : s;
+  }catch(e){}
+
+  // Base64: 공백/줄바꿈 제거 후 시도
+  const b64 = s.replace(/\s+/g,"");
+  if(/^[A-Za-z0-9+/=_-]+$/.test(b64)){
+    try{
+      const std = b64.replace(/-/g,"+").replace(/_/g,"/");
+      const json = b64ToUtf8(std);
+      o = tryParseJson(json);
+      if(o) return {data:o, how:"Base64 디코딩 → JSON"};
+    }catch(e){}
+  }
+  return null;
+}
+
+/* ───────────────── 날짜/포맷 헬퍼 ───────────────── */
+const KST_LABEL = " (KST)";
+function parseDateAny(s){
+  if(!s || typeof s !== "string") return null;
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+  if(m) return new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6])); // 저장은 UTC 기준
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m) return new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));
+  m = s.match(/^(\d{4})(\d{2})(\d{2})$/); // yyyyMMdd
+  if(m) return new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+function pad(n){ return String(n).padStart(2,"0"); }
+// UTC 문자열 → 한국시간 표기 (+ 원본 병기)
+function fmtDateUtcToKst(s, dateOnly){
+  if(s===undefined || s===null || s==="") return '<span class="no-v">기록 없음</span>';
+  const d = parseDateAny(s);
+  if(!d) return esc(s)+' <span class="sub-note">(파싱 불가 — 원본 표시)</span>';
+  const k = new Date(d.getTime() + 9*3600*1000);
+  const ds = k.getUTCFullYear()+"-"+pad(k.getUTCMonth()+1)+"-"+pad(k.getUTCDate());
+  const ts = pad(k.getUTCHours())+":"+pad(k.getUTCMinutes());
+  return dateOnly ? esc(ds) : esc(ds+" "+ts)+KST_LABEL;
+}
+// yyyyMMdd 등 "기기 로컬 날짜" 저장 필드 → 변환 없이 그대로
+function fmtDateRaw(s){
+  if(!s) return '<span class="no-v">기록 없음</span>';
+  const m = String(s).match(/^(\d{4})(\d{2})(\d{2})$/);
+  if(m) return esc(m[1]+"-"+m[2]+"-"+m[3]);
+  return esc(s);
+}
+function fmtBool(b, yesText, noText){
+  return b ? '<span class="yes">✓ '+(yesText||"예")+'</span>'
+           : '<span class="no-v">✗ '+(noText||"아니오")+'</span>';
+}
+function fmtNum(n){
+  if(n===undefined||n===null) return '<span class="no-v">-</span>';
+  if(typeof n==="number") return esc(n.toLocaleString("ko-KR"));
+  return esc(String(n));
+}
+// InfVal(무한값) — 직렬화 구조를 모르니 안전하게 표시
+function fmtInfVal(v){
+  if(v===undefined||v===null) return '<span class="no-v">-</span>';
+  if(typeof v==="number"||typeof v==="string") return esc(Number(v).toLocaleString? Number(v).toLocaleString("ko-KR") : String(v));
+  if(typeof v==="object"){
+    const keys = Object.keys(v);
+    const short = keys.map(k=>k+":"+JSON.stringify(v[k])).join(", ");
+    return '<span title="InfVal 직렬화 값">'+esc(short.length>60? short.slice(0,60)+"…" : short)+'</span>';
+  }
+  return esc(String(v));
+}
+function fmtPlayTime(sec){
+  if(typeof sec!=="number") return '<span class="no-v">-</span>';
+  const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60);
+  return esc(h+"시간 "+m+"분");
+}
+function countTrue(arr){ return Array.isArray(arr) ? arr.filter(Boolean).length : 0; }
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+/* ───────────────── 렌더링 ───────────────── */
+function badge(label, cls){ return '<span class="badge '+(cls||"")+'"><span class="dot"></span>'+esc(label)+'</span>'; }
+function row(k, vHtml){ return '<div class="k">'+esc(k)+'</div><div class="v">'+vHtml+'</div>'; }
+function card(title, rowsHtml, wide){
+  return '<div class="card'+(wide?" wide":"")+'"><h2>'+esc(title)+'</h2><div class="kv">'+rowsHtml+'</div></div>';
+}
+
+function analyze(){
+  const errBox = document.getElementById("error-box");
+  const note = document.getElementById("decode-note");
+  errBox.style.display="none"; note.textContent="";
+
+  const raw = document.getElementById("input").value;
+  if(!raw.trim()){ showError("데이터를 붙여넣은 뒤 분석하기를 눌러 주세요."); return; }
+
+  const decoded = decodeInput(raw);
+  if(!decoded){
+    showError("데이터를 해석할 수 없습니다. JSON 전체 또는 Base64 문자열이 온전히 복사됐는지 확인해 주세요. (앞뒤 일부만 복사되면 실패합니다)");
+    return;
+  }
+  const d = decoded.data;
+  note.textContent = "해석 방식: "+decoded.how;
+  render(d);
+}
+
+function render(d){
+  /* 요약 배지 */
+  const strip = document.getElementById("summary-strip");
+  let badges = "";
+  if(d.is_TimeHacker) badges += badge("⚠ 타임해커 판정", "on-danger");
+  badges += badge(d.Mission_is_Vip ? "VIP 패스" : "VIP 미보유", d.Mission_is_Vip ? "on-vip":"");
+  badges += badge(d.Mission_is_Luxury ? "Luxury 패스" : "Luxury 미보유", d.Mission_is_Luxury ? "on-lux":"");
+  if(d.Is_Remove_AD_All) badges += badge("모든 광고 제거", "on-ok");
+  else if(d.Is_Remove_AD_forced) badges += badge("강제 광고 제거", "on-ok");
+  else badges += badge("광고 제거 없음");
+  if(d.FreeCash_RewardAdRemoved) badges += badge("프리캐시 리워드광고 제거", "on-accent");
+  badges += badge("결제 "+(d.PurchaseCount||0)+"회", (d.PurchaseCount>0)?"on-accent":"");
+  badges += badge(d.TutorialCleared ? "튜토리얼 완료" : "튜토리얼 미완료", d.TutorialCleared?"on-ok":"");
+  strip.innerHTML = badges;
+  strip.style.display = "flex";
+
+  const g = [];
+
+  /* 기본 정보 */
+  g.push(card("기본 정보",
+    row("게임 버전", esc(d.BundleCode||"-")) +
+    row("마지막 저장", fmtDateUtcToKst(d.LastSaveTime)) +
+    row("총 플레이 시간", fmtPlayTime(d.TotalPlayTime)) +
+    row("리뷰 작성", fmtBool(d.is_reviewed)) +
+    row("출석 진행", fmtNum(d.CheckNum)+'회차 <span class="sub-note">마지막: '+fmtDateRaw(d.LastCheck_Date)+"</span>") +
+    row("타임해커 플래그", d.is_TimeHacker ? '<span class="warn-v">⚠ 감지됨</span>' : fmtBool(false,"","정상")) +
+    row("온라인검사 실패 누적", fmtNum(d.OfflineFailStreak)+'일 <span class="sub-note">마지막: '+fmtDateRaw(d.OfflineFailLastDate)+"</span>")
+  ));
+
+  /* 상점 / 구매 */
+  const packs = [
+    ["강제 광고 제거", d.Is_Remove_AD_forced],
+    ["모든 광고 제거", d.Is_Remove_AD_All],
+    ["자동업그레이드 팩", d.Is_AutoUpgrade_Pack],
+    ["버프 팩", d.Is_Buff_Pack],
+    ["다이아 팩", d.Is_Dia_Pack],
+    ["광산 팩", d.Is_Mine_Pack],
+  ];
+  let packTable = '<table class="pack">';
+  packs.forEach(p=>{ packTable += "<tr><td>"+esc(p[0])+"</td><td>"+fmtBool(p[1],"보유","미보유")+"</td></tr>"; });
+  packTable += "</table>";
+  const txns = Array.isArray(d.ProcessedTxnIds) ? d.ProcessedTxnIds : [];
+  let txnHtml = '<details><summary>처리된 결제 트랜잭션 '+txns.length+'건 (최근순 최대 50개 보관)</summary><div class="txn-list">'
+    + (txns.length ? txns.map(t=>esc(t)).join("<br>") : '<span class="no-v">없음</span>') + "</div></details>";
+  g.push('<div class="card"><h2>상점 · 구매 내역</h2>'
+    + '<div class="kv" style="margin-bottom:10px">'
+    + row("총 결제 횟수", fmtNum(d.PurchaseCount)+"회")
+    + row("일일 코어 특가", fmtDateUtcToKst(d.LastDailyCorePurchase_Date))
+    + row("주간 코어 특가", fmtDateUtcToKst(d.LastWeeklyCorePurchase_Date))
+    + row("주간 6000코어 특가", fmtDateUtcToKst(d.LastWeekly6000CorePurchase_Date))
+    + "</div>" + packTable + txnHtml + "</div>");
+
+  /* 계정 */
+  const pw = d.PlayFab_Password ? esc(d.PlayFab_Password) : "";
+  g.push(card("계정 (PlayFab)",
+    row("닉네임", esc(d.PlayFab_DisplayName||"-")) +
+    row("이메일", esc(d.PlayFab_Email||"-")) +
+    row("비밀번호", pw ? '<span id="pw-mask">••••••••</span><span id="pw-real" style="display:none">'+pw+'</span><button class="pw-btn" onclick="togglePw(this)">보기</button>' : '<span class="no-v">없음</span>')
+  ));
+
+  /* 재화 */
+  g.push(card("보유 재화",
+    row("골드", fmtInfVal(d.Money)) +
+    row("누적 골드", fmtInfVal(d.Money_Accum)) +
+    row("루비", fmtInfVal(d.Ruby)) +
+    row("다이아", fmtNum(d.Dia)+' <span class="sub-note">획득 '+fmtNum(d._getDia)+" / 사용 "+fmtNum(d._useDia)+"</span>") +
+    row("펫 코인", fmtNum(d.PetCoin)) +
+    row("탐험 코어", Array.isArray(d.Adventure_Currency_Core)? esc(d.Adventure_Currency_Core.join(" / ")) : '<span class="no-v">-</span>')
+  ));
+
+  /* 진행도 */
+  g.push(card("진행도",
+    row("메인 스테이지", fmtNum(d.Stage_Now)+" - "+fmtNum(d.Level_Now)) +
+    row("최고 스테이지 값", fmtNum(d.Stage_Value_Max)+' <span class="sub-note">(Stage_Value_Max)</span>') +
+    row("환생 횟수", fmtNum(d.Rebirth_Count)) +
+    row("보스 스테이지", fmtNum(d.Boss_Stage)) +
+    row("도전(스피드런)", fmtNum(d.SpeedRun_Stage_Now)) +
+    row("사냥", "웨이브 "+fmtNum(d.Wave_Now)+" / Lv "+fmtNum(d.Lv_Now)) +
+    row("탐험 레벨", fmtNum(d.Adventure_Lv)+' <span class="sub-note">Exp '+fmtNum(d.Adventure_Exp)+" · 티켓 "+fmtNum(d.Adventure_Ticket_Now)+"</span>") +
+    row("보유 총 / 펫", countTrue(d.Gun_Collect)+"종 도감 / "+countTrue(d.Pet_Collect)+"종 도감")
+  ));
+
+  /* 시즌패스 / 미션 */
+  const missionCnt = Array.isArray(d.Mission_ExpGet) ? d.Mission_ExpGet.length : 0;
+  g.push(card("시즌패스 · 미션",
+    row("VIP 패스", fmtBool(d.Mission_is_Vip,"보유","미보유")) +
+    row("Luxury 패스", fmtBool(d.Mission_is_Luxury,"보유","미보유")) +
+    row("시즌 번호", fmtNum(d.Mission_Season_Num)) +
+    row("시즌 시작 여부", fmtBool(d.Mission_is_SeasonStart,"시작됨","시작 전")) +
+    row("미션 시작일", fmtDateUtcToKst(d.Mission_MissionStart_Date)) +
+    row("시즌 종료일", fmtDateUtcToKst(d.Mission_SeasonEnd_Date)) +
+    row("패스 레벨 / Exp", fmtNum(d.Mission_Reward_Lv)+" Lv / "+fmtNum(d.Mission_Reward_Exp)+" Exp") +
+    row("일일미션 수령", countTrue(d.Mission_ExpGet)+" / "+missionCnt+' <span class="sub-note">Luxury '+countTrue(d.Mission_ExpGet_Luxury)+"건</span>") +
+    row("패스 보상 수령", "일반 "+countTrue(d.NormalReward_Get)+"개 · 에픽 "+countTrue(d.EpicReward_Get)+"개") +
+    row("미션 진행값", "나무 "+fmtNum(d.Mission_TreeCount_Value)+" · 클리어 "+fmtNum(d.Mission_StageClear_Value)+" · 환생 "+fmtNum(d.Mission_Rebirth_Value)+" · 광산 "+fmtNum(d.Mission_PlayMine_Value))
+  ));
+
+  /* 강화환생 / 프리캐시 */
+  g.push(card("강화환생 · 프리캐시",
+    row("강화환생(광고) 오늘 사용", fmtNum(d.UpgradeRebirth_UseCount)+"회") +
+    row("강화환생(인앱) 오늘 사용", fmtNum(d.UpgradeRebirth_IAP_UseCount)+"회") +
+    row("강화환생 마지막 사용일", fmtDateRaw(d.UpgradeRebirth_LastDate)) +
+    row("프리캐시 연동 보상", fmtBool(d.FreeCash_LinkRewardReceived,"수령","미수령")) +
+    row("리워드 광고 제거 혜택", fmtBool(d.FreeCash_RewardAdRemoved,"적용 중","없음")) +
+    row("프리캐시 팝업 로그", fmtBool(d.FreeCash_PopLogSent,"전송됨","미전송"))
+  ));
+
+  /* 기타 콘텐츠 */
+  g.push(card("기타 콘텐츠",
+    row("낚시 무료 뽑기", fmtNum(d.FreeGachaCount)+'회 <span class="sub-note">기준일: '+fmtDateUtcToKst(d.Free_GachaDate,true)+"</span>") +
+    row("낚시 첫 뽑기", fmtBool(d.is_FirstGacha)) +
+    row("보유 생선", (Array.isArray(d.FishInventory)? d.FishInventory.length : 0)+"마리") +
+    row("광산 티켓 사용", fmtNum(d.TicketUse_Count)+'회 <span class="sub-note">충전 기준일: '+fmtDateUtcToKst(d.TicketCharge_Date,true)+"</span>") +
+    row("광산 최고 보상", fmtNum(d.Best_Reward)) +
+    row("스킨", "선택 #"+fmtNum(d.Skin_Selected_num)+" · 해금 "+countTrue(d.Skin_Unlock)+"종") +
+    row("유물", Array.isArray(d.Relics) ? d.Relics.filter(r=>r&&r.is_Unlock).length+"종 해금" : '<span class="no-v">-</span>') +
+    row("설정", "BGM "+(d.BGM_Mute?"음소거":"켜짐")+" / 효과음 "+(d.SFX_Mute?"음소거":"켜짐"))
+  ));
+
+  document.getElementById("grid").innerHTML = g.join("");
+  document.getElementById("raw-json").textContent = JSON.stringify(d, null, 2);
+  document.getElementById("result").style.display = "block";
+}
+
+function togglePw(btn){
+  const mask = document.getElementById("pw-mask"), real = document.getElementById("pw-real");
+  const showing = real.style.display !== "none";
+  real.style.display = showing ? "none" : "inline";
+  mask.style.display = showing ? "inline" : "none";
+  btn.textContent = showing ? "보기" : "숨기기";
+}
+function showError(msg){
+  const e = document.getElementById("error-box");
+  e.textContent = msg; e.style.display = "block";
+  document.getElementById("result").style.display = "none";
+  document.getElementById("summary-strip").style.display = "none";
+}
+function clearAll(){
+  document.getElementById("input").value = "";
+  document.getElementById("result").style.display = "none";
+  document.getElementById("summary-strip").style.display = "none";
+  document.getElementById("error-box").style.display = "none";
+  document.getElementById("decode-note").textContent = "";
+}
+// 붙여넣기만 해도 자동 분석
+document.getElementById("input").addEventListener("paste", ()=> setTimeout(analyze, 50));
+</script>
+</body>
+</html>
