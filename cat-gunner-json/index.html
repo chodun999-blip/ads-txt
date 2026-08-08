@@ -239,6 +239,8 @@ function fmtPlayTime(sec){
   return esc(h+"시간 "+m+"분");
 }
 function countTrue(arr){ return Array.isArray(arr) ? arr.filter(Boolean).length : 0; }
+// _getDia/_useDia는 보안상 3배로 저장됨 → 실제값으로 복원
+function divDia(n){ return (typeof n==="number") ? Math.round(n/3) : n; }
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
 /* ───────────────── 렌더링 ───────────────── */
@@ -273,12 +275,19 @@ function render(d){
   if(d.is_TimeHacker) badges += badge("⚠ 타임해커 판정", "on-danger");
   badges += badge(d.Mission_is_Vip ? "VIP 패스" : "VIP 미보유", d.Mission_is_Vip ? "on-vip":"");
   badges += badge(d.Mission_is_Luxury ? "Luxury 패스" : "Luxury 미보유", d.Mission_is_Luxury ? "on-lux":"");
-  if(d.Is_Remove_AD_All) badges += badge("모든 광고 제거", "on-ok");
-  else if(d.Is_Remove_AD_forced) badges += badge("강제 광고 제거", "on-ok");
-  else badges += badge("광고 제거 없음");
+  const iapBadges = [
+    ["강제 광고 제거", d.Is_Remove_AD_forced],
+    ["모든 광고 제거", d.Is_Remove_AD_All],
+    ["자동업그레이드 팩", d.Is_AutoUpgrade_Pack],
+    ["버프 팩", d.Is_Buff_Pack],
+    ["다이아 팩", d.Is_Dia_Pack],
+    ["광산 팩", d.Is_Mine_Pack],
+  ];
+  iapBadges.forEach(p=>{
+    badges += badge(p[1] ? p[0] : p[0]+" 미보유", p[1] ? "on-ok" : "");
+  });
   if(d.FreeCash_RewardAdRemoved) badges += badge("프리캐시 리워드광고 제거", "on-accent");
   badges += badge("결제 "+(d.PurchaseCount||0)+"회", (d.PurchaseCount>0)?"on-accent":"");
-  badges += badge(d.TutorialCleared ? "튜토리얼 완료" : "튜토리얼 미완료", d.TutorialCleared?"on-ok":"");
   strip.innerHTML = badges;
   strip.style.display = "flex";
 
@@ -295,8 +304,10 @@ function render(d){
     row("온라인검사 실패 누적", fmtNum(d.OfflineFailStreak)+'일 <span class="sub-note">마지막: '+fmtDateRaw(d.OfflineFailLastDate)+"</span>")
   ));
 
-  /* 상점 / 구매 */
+  /* 상점 / 구매 — 비소모성 상품 전체 */
   const packs = [
+    ["VIP 패스", d.Mission_is_Vip],
+    ["Luxury 패스", d.Mission_is_Luxury],
     ["강제 광고 제거", d.Is_Remove_AD_forced],
     ["모든 광고 제거", d.Is_Remove_AD_All],
     ["자동업그레이드 팩", d.Is_AutoUpgrade_Pack],
@@ -331,7 +342,7 @@ function render(d){
     row("골드", fmtInfVal(d.Money)) +
     row("누적 골드", fmtInfVal(d.Money_Accum)) +
     row("루비", fmtInfVal(d.Ruby)) +
-    row("다이아", fmtNum(d.Dia)+' <span class="sub-note">획득 '+fmtNum(d._getDia)+" / 사용 "+fmtNum(d._useDia)+"</span>") +
+    row("다이아", fmtNum(d.Dia)+' <span class="sub-note">획득 '+fmtNum(divDia(d._getDia))+" / 사용 "+fmtNum(divDia(d._useDia))+"</span>") +
     row("펫 코인", fmtNum(d.PetCoin)) +
     row("탐험 코어", Array.isArray(d.Adventure_Currency_Core)? esc(d.Adventure_Currency_Core.join(" / ")) : '<span class="no-v">-</span>')
   ));
