@@ -241,6 +241,17 @@ function fmtPlayTime(sec){
 function countTrue(arr){ return Array.isArray(arr) ? arr.filter(Boolean).length : 0; }
 // _getDia/_useDia는 보안상 3배로 저장됨 → 실제값으로 복원
 function divDia(n){ return (typeof n==="number") ? Math.round(n/3) : n; }
+// 메인 스테이지: 저장값은 0부터 시작 → 표시할 때 +1
+function fmtStagePair(stage, level){
+  if(typeof stage!=="number"||typeof level!=="number") return '<span class="no-v">-</span>';
+  return esc((stage+1)+"스테이지 "+(level+1)+"웨이브");
+}
+// 최고 스테이지: Stage_Value_Max ÷10 몫+1 = 스테이지, 나머지+1 = 웨이브
+function fmtStageMax(v){
+  if(typeof v!=="number") return '<span class="no-v">-</span>';
+  const st = Math.floor(v/10)+1, wv = (v%10)+1;
+  return esc(st+"스테이지 "+wv+"웨이브")+' <span class="sub-note">(원본값 '+esc(v.toLocaleString("ko-KR"))+")</span>";
+}
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
 /* ───────────────── 렌더링 ───────────────── */
@@ -349,8 +360,8 @@ function render(d){
 
   /* 진행도 */
   g.push(card("진행도",
-    row("메인 스테이지", fmtNum(d.Stage_Now)+" - "+fmtNum(d.Level_Now)) +
-    row("최고 스테이지 값", fmtNum(d.Stage_Value_Max)+' <span class="sub-note">(Stage_Value_Max)</span>') +
+    row("메인 스테이지", fmtStagePair(d.Stage_Now, d.Level_Now)) +
+    row("최고 스테이지", fmtStageMax(d.Stage_Value_Max)) +
     row("환생 횟수", fmtNum(d.Rebirth_Count)) +
     row("보스 스테이지", fmtNum(d.Boss_Stage)) +
     row("도전(스피드런)", fmtNum(d.SpeedRun_Stage_Now)) +
