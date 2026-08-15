@@ -140,7 +140,7 @@
   </header>
 
   <div class="input-card">
-    <textarea id="input" placeholder="세이브 데이터(JSON 또는 Base64 문자열)를 그대로 붙여넣으세요."></textarea>
+    <textarea id="input" placeholder="세이브 데이터를 그대로 붙여넣으세요. (JSON · Base64 · GZ1)"></textarea>
     <div class="input-row">
       <button class="primary" onclick="analyze()">분석하기</button>
       <button class="ghost" onclick="clearAll()">초기화</button>
@@ -166,38 +166,82 @@
 </div>
 
 <script>
-/* ───────────────── 디코딩 ───────────────── */
-function b64ToUtf8(s){
-  const bin = atob(s);
+/* ───────────────── 디코딩 ─────────────────
+   지원 형식 (구버전 · 신버전 모두)
+     1) JSON 원문
+     2) URL 인코딩된 문자열
+     3) "GZ1:" + Base64URL(gzip(JSON))   ← 신버전 압축본
+     4) Base64(JSON)                     ← 구버전 무압축
+   + "[BACKUP] " 접두사 자동 처리
+   + 메일 본문을 통째로 붙여넣어도 압축 토큰만 추출
+──────────────────────────────────────────── */
+const GZ_MARK = "GZ1:";
+
+// Base64 / Base64URL 모두 허용 → 바이트 배열
+function b64ToBytes(s){
+  const std = s.replace(/-/g,"+").replace(/_/g,"/");
+  const pad = std.length % 4;
+  const padded = std + (pad===2 ? "==" : pad===3 ? "=" : "");
+  const bin = atob(padded);
   const bytes = new Uint8Array(bin.length);
   for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-  return new TextDecoder("utf-8").decode(bytes);
+  return bytes;
+}
+function b64ToUtf8(s){
+  return new TextDecoder("utf-8").decode(b64ToBytes(s));
 }
 function tryParseJson(s){
   try{ const o = JSON.parse(s); return (o && typeof o === "object") ? o : null; }
   catch(e){ return null; }
 }
-// 순수 JSON → URL디코드 → Base64 → URL디코드 후 Base64 순으로 시도
-function decodeInput(rawInput){
-  let s = rawInput.trim();
-  let o = tryParseJson(s);
-  if(o) return {data:o, how:"JSON 원문"};
 
+// gzip 해제 (브라우저 내장 DecompressionStream)
+async function gunzipToText(bytes){
+  if(typeof DecompressionStream === "undefined")
+    throw new Error("이 브라우저는 압축 해제를 지원하지 않습니다. 최신 크롬 또는 엣지에서 열어 주세요.");
   try{
-    const u = decodeURIComponent(s);
-    o = tryParseJson(u);
-    if(o) return {data:o, how:"URL 인코딩 해제 → JSON"};
-    s = /%[0-9A-Fa-f]{2}/.test(rawInput) ? u : s;
-  }catch(e){}
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+    const buf = await new Response(stream).arrayBuffer();
+    return new TextDecoder("utf-8").decode(buf);
+  }catch(e){
+    throw new Error("압축 해제에 실패했습니다. 문자열이 중간에 잘렸거나 일부만 복사됐을 수 있습니다.");
+  }
+}
 
-  // Base64: 공백/줄바꿈 제거 후 시도
-  const b64 = s.replace(/\s+/g,"");
+async function decodeInput(rawInput){
+  let s = rawInput.trim();
+  const backup = /\[BACKUP\]/i.test(s);
+
+  // 1) 순수 JSON
+  let o = tryParseJson(s);
+  if(o) return {data:o, how:"JSON 원문", backup};
+
+  // 2) URL 인코딩 해제 (GZ1%3A... 형태로 복사된 경우 포함)
+  if(/%[0-9A-Fa-f]{2}/.test(s)){
+    try{
+      const u = decodeURIComponent(s);
+      o = tryParseJson(u);
+      if(o) return {data:o, how:"URL 인코딩 해제 → JSON", backup};
+      s = u;
+    }catch(e){}
+  }
+
+  // 3) 압축본 — 메일 본문에 섞여 있어도 토큰만 뽑아낸다
+  const m = s.match(new RegExp(GZ_MARK + "([A-Za-z0-9_\\-+/=\\s]+)"));
+  if(m){
+    const token = m[1].replace(/\s+/g,"");
+    const json = await gunzipToText(b64ToBytes(token));
+    o = tryParseJson(json);
+    if(o) return {data:o, how:"압축 해제(gzip) → JSON", backup};
+    return null;
+  }
+
+  // 4) 구버전 무압축 Base64
+  const b64 = s.replace(/\s+/g,"").replace(/^\[BACKUP\]/i,"");
   if(/^[A-Za-z0-9+/=_-]+$/.test(b64)){
     try{
-      const std = b64.replace(/-/g,"+").replace(/_/g,"/");
-      const json = b64ToUtf8(std);
-      o = tryParseJson(json);
-      if(o) return {data:o, how:"Base64 디코딩 → JSON"};
+      o = tryParseJson(b64ToUtf8(b64));
+      if(o) return {data:o, how:"Base64 디코딩 → JSON", backup};
     }catch(e){}
   }
   return null;
@@ -327,7 +371,7 @@ function card(title, rowsHtml, wide){
   return '<div class="card'+(wide?" wide":"")+'"><h2>'+esc(title)+'</h2><div class="kv">'+rowsHtml+'</div></div>';
 }
 
-function analyze(){
+async function analyze(){
   const errBox = document.getElementById("error-box");
   const note = document.getElementById("decode-note");
   errBox.style.display="none"; note.textContent="";
@@ -335,14 +379,25 @@ function analyze(){
   const raw = document.getElementById("input").value;
   if(!raw.trim()){ showError("데이터를 붙여넣은 뒤 분석하기를 눌러 주세요."); return; }
 
-  const decoded = decodeInput(raw);
-  if(!decoded){
-    showError("데이터를 해석할 수 없습니다. JSON 전체 또는 Base64 문자열이 온전히 복사됐는지 확인해 주세요. (앞뒤 일부만 복사되면 실패합니다)");
+  let decoded;
+  try{
+    note.textContent = "해석 중…";
+    decoded = await decodeInput(raw);
+  }catch(e){
+    note.textContent = "";
+    showError(e.message || "데이터 해석 중 오류가 발생했습니다.");
     return;
   }
-  const d = decoded.data;
-  note.textContent = "해석 방식: "+decoded.how;
-  render(d);
+
+  if(!decoded){
+    note.textContent = "";
+    showError("데이터를 해석할 수 없습니다. JSON 전체 · Base64 · GZ1: 압축본 중 하나가 온전히 복사됐는지 확인해 주세요. (앞뒤 일부만 복사되면 실패합니다)");
+    return;
+  }
+
+  note.textContent = "해석 방식: " + decoded.how
+    + (decoded.backup ? "  ·  ⚠ 백업 파일에서 읽힌 데이터" : "");
+  render(decoded.data);
 }
 
 /* 타임해커 판정 상세 카드 — 판정 중이거나 과거 판정 기록이 있을 때만 노출 */
