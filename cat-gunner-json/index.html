@@ -27,7 +27,7 @@
   header .tag{font-size:12px; color:var(--sub); font-weight:600;}
   .input-card{
     background:var(--card); border:1px solid var(--line); border-radius:12px;
-    padding:16px; margin-bottom:20px;
+    padding:16px; margin-bottom:14px;
   }
   textarea{
     width:100%; min-height:110px; resize:vertical;
@@ -52,6 +52,13 @@
     display:none; margin-top:10px; background:var(--danger-soft); color:var(--danger);
     border-radius:8px; padding:10px 12px; font-size:13px; font-weight:600;
   }
+
+  /* ── 시각 표기 안내 ── */
+  .legend{
+    display:flex; flex-direction:column; gap:3px;
+    font-size:12px; color:var(--sub); margin-bottom:20px; padding-left:2px;
+  }
+  .legend b{color:var(--ink); font-weight:700;}
 
   /* ── 요약 배지 스트립 ── */
   #summary-strip{display:none; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
@@ -81,6 +88,14 @@
     display:flex; align-items:center; gap:6px;
   }
   .card h2::before{content:""; width:4px; height:14px; border-radius:2px; background:var(--accent);}
+  /* 타임해커 판정 카드 — 판정 중일 때만 붉은 강조 */
+  .card.danger{border-color:#F3BDBD; background:#FFFCFC;}
+  .card.danger h2{color:var(--danger);}
+  .card.danger h2::before{background:var(--danger);}
+  .card-note{
+    font-size:12px; color:var(--sub); margin-top:10px; padding-top:10px;
+    border-top:1px dashed var(--line); line-height:1.6;
+  }
   .kv{display:grid; grid-template-columns:minmax(110px,42%) 1fr; row-gap:7px; column-gap:12px;}
   .kv .k{color:var(--sub); font-size:13px;}
   .kv .v{font-family:var(--mono); font-size:13px; word-break:break-all;}
@@ -90,6 +105,7 @@
   .warn-v{color:var(--danger); font-weight:800; font-family:inherit;}
   .muted{color:var(--sub);}
   .sub-note{font-size:11px; color:var(--sub); font-family:inherit;}
+  .sub-note.strong{color:var(--danger); font-weight:700;}
 
   /* 구매 패키지 표 */
   table.pack{width:100%; border-collapse:collapse; font-size:13px;}
@@ -131,6 +147,11 @@
       <span id="decode-note"></span>
     </div>
     <div id="error-box"></div>
+  </div>
+
+  <div class="legend">
+    <span>마지막 저장 · 타임해커 판정 시각 · 상점 특가 시각은 <b>UTC 기준으로 저장</b>되며, 화면에는 <b>한국시간(KST, UTC+9)</b>으로 환산해 표시합니다.</span>
+    <span>출석체크 · 강화환생 · 온라인검사 실패일 등은 <b>기기 로컬 시간</b>으로 저장되므로 환산 없이 원본 그대로 표시합니다.</span>
   </div>
 
   <div id="summary-strip"></div>
@@ -186,6 +207,7 @@ function decodeInput(rawInput){
 const KST_LABEL = " (KST)";
 function parseDateAny(s){
   if(!s || typeof s !== "string") return null;
+  // 끝에 Z가 붙어도 매칭됨 (앵커 없음)
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
   if(m) return new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6])); // 저장은 UTC 기준
   m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -196,15 +218,32 @@ function parseDateAny(s){
   return isNaN(d) ? null : d;
 }
 function pad(n){ return String(n).padStart(2,"0"); }
+function toKstString(d, withSec){
+  const k = new Date(d.getTime() + 9*3600*1000);
+  const ds = k.getUTCFullYear()+"-"+pad(k.getUTCMonth()+1)+"-"+pad(k.getUTCDate());
+  const ts = pad(k.getUTCHours())+":"+pad(k.getUTCMinutes())+(withSec?":"+pad(k.getUTCSeconds()):"");
+  return ds+" "+ts;
+}
 // UTC 문자열 → 한국시간 표기 (+ 원본 병기)
-function fmtDateUtcToKst(s, dateOnly){
+function fmtDateUtcToKst(s, dateOnly, withUtc){
   if(s===undefined || s===null || s==="") return '<span class="no-v">기록 없음</span>';
   const d = parseDateAny(s);
   if(!d) return esc(s)+' <span class="sub-note">(파싱 불가 — 원본 표시)</span>';
   const k = new Date(d.getTime() + 9*3600*1000);
   const ds = k.getUTCFullYear()+"-"+pad(k.getUTCMonth()+1)+"-"+pad(k.getUTCDate());
   const ts = pad(k.getUTCHours())+":"+pad(k.getUTCMinutes());
-  return dateOnly ? esc(ds) : esc(ds+" "+ts)+KST_LABEL;
+  if(dateOnly) return esc(ds);
+  let out = esc(ds+" "+ts)+KST_LABEL;
+  if(withUtc) out += ' <span class="sub-note">UTC 원본 '+esc(String(s).replace(/Z$/,""))+"</span>";
+  return out;
+}
+// 타임해커 증거용: UTC 원본을 앞세우고 KST 환산을 병기
+function fmtEvidenceTime(s){
+  if(s===undefined || s===null || s==="") return '<span class="no-v">기록 없음</span>';
+  const d = parseDateAny(s);
+  const rawTxt = esc(String(s).replace(/Z$/,""))+" UTC";
+  if(!d) return rawTxt+' <span class="sub-note">(파싱 불가 — 원본 표시)</span>';
+  return rawTxt+' <span class="sub-note">KST '+esc(toKstString(d,true))+"</span>";
 }
 // yyyyMMdd 등 "기기 로컬 날짜" 저장 필드 → 변환 없이 그대로
 function fmtDateRaw(s){
@@ -254,6 +293,33 @@ function fmtStageMax(v){
 }
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
+/* ───────────────── 타임해커 판정 헬퍼 ───────────────── */
+// 기기 시각 - 서버 시각 (시간 단위). 양수면 기기가 미래.
+function timeHackDiffHours(devStr, srvStr){
+  const d = parseDateAny(devStr), s = parseDateAny(srvStr);
+  if(!d || !s) return null;
+  return (d.getTime() - s.getTime()) / 3600000;
+}
+function fmtDiffHours(h){
+  const abs = Math.abs(h);
+  let amount;
+  if(abs >= 24) amount = (abs/24).toFixed(1)+"일";
+  else if(abs >= 1) amount = abs.toFixed(1)+"시간";
+  else amount = Math.round(abs*60)+"분";
+  const dir = h >= 0 ? "기기가 미래 — 치트 이득 방향" : "기기가 과거 — 절전/시계정지 오탐 가능";
+  const cls = h >= 0 ? "warn-v" : "muted";
+  return '<span class="'+cls+'">'+(h>=0?"+":"-")+esc(amount)+'</span> <span class="sub-note">('+esc(dir)+")</span>";
+}
+// FlagAsHacker에 넘긴 reason 문자열 해석
+function timeHackReasonLabel(reason){
+  const r = String(reason||"");
+  if(r.startsWith("wrong_time"))     return "기기 시계가 서버보다 크게 미래 (절대 오차 23시간 초과)";
+  if(r.startsWith("real_cheat"))     return "플레이 중 시계 점프 감지 (연속 측정 간 변화)";
+  if(r.startsWith("offline_streak")) return "온라인 시간검사 연속 실패 (오프라인 회피 패턴)";
+  if(r.startsWith("obscured_memory"))return "메모리 값 변조 감지 (ObscuredCheatingDetector)";
+  return null;
+}
+
 /* ───────────────── 렌더링 ───────────────── */
 function badge(label, cls){ return '<span class="badge '+(cls||"")+'"><span class="dot"></span>'+esc(label)+'</span>'; }
 function row(k, vHtml){ return '<div class="k">'+esc(k)+'</div><div class="v">'+vHtml+'</div>'; }
@@ -279,11 +345,58 @@ function analyze(){
   render(d);
 }
 
+/* 타임해커 판정 상세 카드 — 판정 중이거나 과거 판정 기록이 있을 때만 노출 */
+function timeHackCard(d){
+  const flagged = !!d.is_TimeHacker;
+  const hasEvidence = !!(d.TimeHack_FlagDate || d.TimeHack_Reason || d.TimeHack_ServerDate);
+  if(!flagged && !hasEvidence) return "";
+
+  const title = flagged ? "타임해커 판정 상세 (현재 랭킹 차단)"
+                        : "타임해커 판정 이력 (현재는 해제됨)";
+
+  let rows = "";
+  rows += row("현재 상태", flagged
+    ? '<span class="warn-v">⚠ 판정 중 — 랭킹 차단</span>'
+    : '<span class="yes">✓ 해제됨 (사면 처리)</span> <span class="sub-note">아래는 과거 판정 당시 기록</span>');
+
+  if(hasEvidence){
+    const reasonLabel = timeHackReasonLabel(d.TimeHack_Reason);
+    rows += row("판정 사유", (d.TimeHack_Reason ? esc(d.TimeHack_Reason) : '<span class="no-v">기록 없음</span>')
+      + (reasonLabel ? ' <span class="sub-note">'+esc(reasonLabel)+"</span>" : ""));
+    rows += row("판정 시각 (기기 시계)", fmtEvidenceTime(d.TimeHack_FlagDate));
+    rows += row("판정 시각 (서버)", d.TimeHack_ServerDate
+      ? fmtEvidenceTime(d.TimeHack_ServerDate)
+      : '<span class="no-v">기록 없음</span> <span class="sub-note">온라인 응답을 못 받은 경로 (오프라인 누적 · 메모리 변조)</span>');
+
+    const diff = timeHackDiffHours(d.TimeHack_FlagDate, d.TimeHack_ServerDate);
+    rows += row("기기 − 서버 차이", diff===null
+      ? '<span class="no-v">계산 불가</span> <span class="sub-note">서버 시각이 없으면 차이를 낼 수 없습니다</span>'
+      : fmtDiffHours(diff));
+  }else{
+    rows += row("판정 시각", '<span class="no-v">기록 없음</span> <span class="sub-note strong">증거 기록 기능 추가 이전 버전에서 판정된 유저</span>');
+  }
+
+  rows += row("온라인검사 실패 누적", fmtNum(d.OfflineFailStreak)+'일 <span class="sub-note">마지막 카운트 '+fmtDateRaw(d.OfflineFailLastDate)+" · 기기 로컬</span>");
+  rows += row("마지막 저장", fmtDateUtcToKst(d.LastSaveTime, false, true));
+
+  const note = '<div class="card-note">'
+    + '판정 시각은 <b>기기 시계 기준 UTC</b>라 조작된 값 그대로 저장됩니다. 서버 시각과의 차이가 양수면 기기를 미래로 돌린 것이고, '
+    + '음수이거나 몇 시간 수준이면 절전·VM 시계 점프에 의한 오탐일 수 있습니다.'
+    + '</div>';
+
+  return '<div class="card wide'+(flagged?" danger":"")+'"><h2>'+esc(title)+'</h2><div class="kv">'+rows+"</div>"+note+"</div>";
+}
+
 function render(d){
   /* 요약 배지 */
   const strip = document.getElementById("summary-strip");
   let badges = "";
-  if(d.is_TimeHacker) badges += badge("⚠ 타임해커 판정", "on-danger");
+  if(d.is_TimeHacker){
+    const r = d.TimeHack_Reason ? " · "+d.TimeHack_Reason : "";
+    badges += badge("⚠ 타임해커 판정"+r, "on-danger");
+  }else if(d.TimeHack_FlagDate || d.TimeHack_Reason){
+    badges += badge("타임해커 판정 이력 (해제됨)", "on-accent");
+  }
   badges += badge(d.Mission_is_Vip ? "VIP 패스" : "VIP 미보유", d.Mission_is_Vip ? "on-vip":"");
   badges += badge(d.Mission_is_Luxury ? "Luxury 패스" : "Luxury 미보유", d.Mission_is_Luxury ? "on-lux":"");
   const iapBadges = [
@@ -304,15 +417,20 @@ function render(d){
 
   const g = [];
 
+  /* 타임해커 판정 상세 — 최상단 (해당 유저만 노출) */
+  g.push(timeHackCard(d));
+
   /* 기본 정보 */
   g.push(card("기본 정보",
     row("게임 버전", esc(d.BundleCode||"-")) +
-    row("마지막 저장", fmtDateUtcToKst(d.LastSaveTime)) +
+    row("마지막 저장", fmtDateUtcToKst(d.LastSaveTime, false, true)) +
     row("총 플레이 시간", fmtPlayTime(d.TotalPlayTime)) +
     row("리뷰 작성", fmtBool(d.is_reviewed)) +
-    row("출석 진행", fmtNum(d.CheckNum)+'회차 <span class="sub-note">마지막: '+fmtDateRaw(d.LastCheck_Date)+"</span>") +
-    row("타임해커 플래그", d.is_TimeHacker ? '<span class="warn-v">⚠ 감지됨</span>' : fmtBool(false,"","정상")) +
-    row("온라인검사 실패 누적", fmtNum(d.OfflineFailStreak)+'일 <span class="sub-note">마지막: '+fmtDateRaw(d.OfflineFailLastDate)+"</span>")
+    row("출석 진행", fmtNum(d.CheckNum)+'회차 <span class="sub-note">마지막: '+fmtDateRaw(d.LastCheck_Date)+" · 기기 로컬</span>") +
+    row("타임해커 플래그", d.is_TimeHacker
+      ? '<span class="warn-v">⚠ 감지됨</span> <span class="sub-note">상세는 상단 카드 참고</span>'
+      : fmtBool(false,"","정상")) +
+    row("온라인검사 실패 누적", fmtNum(d.OfflineFailStreak)+'일 <span class="sub-note">마지막: '+fmtDateRaw(d.OfflineFailLastDate)+" · 기기 로컬</span>")
   ));
 
   /* 상점 / 구매 — 비소모성 상품 전체 */
@@ -389,7 +507,7 @@ function render(d){
   g.push(card("강화환생 · 프리캐시",
     row("강화환생(광고) 오늘 사용", fmtNum(d.UpgradeRebirth_UseCount)+"회") +
     row("강화환생(인앱) 오늘 사용", fmtNum(d.UpgradeRebirth_IAP_UseCount)+"회") +
-    row("강화환생 마지막 사용일", fmtDateRaw(d.UpgradeRebirth_LastDate)) +
+    row("강화환생 마지막 사용일", fmtDateRaw(d.UpgradeRebirth_LastDate)+' <span class="sub-note">기기 로컬</span>') +
     row("프리캐시 연동 보상", fmtBool(d.FreeCash_LinkRewardReceived,"수령","미수령")) +
     row("리워드 광고 제거 혜택", fmtBool(d.FreeCash_RewardAdRemoved,"적용 중","없음")) +
     row("프리캐시 팝업 로그", fmtBool(d.FreeCash_PopLogSent,"전송됨","미전송"))
