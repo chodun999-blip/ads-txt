@@ -177,6 +177,26 @@
 ──────────────────────────────────────────── */
 const GZ_MARK = "GZ1:";
 
+/* ───────────────── 구매 상품 이력 매핑 ─────────────────
+   itemidx → 상품명 (Shop_manager.ItemIdxFromProductId와 동일 매핑)
+   ※ 게임 코드에 상품이 추가되면 여기도 함께 갱신할 것.
+──────────────────────────────────────────── */
+const ITEM_NAMES = {
+  1:"다이아 dia_0", 2:"다이아 dia_1", 3:"다이아 dia_2", 4:"다이아 dia_3", 5:"다이아 dia_4",
+  6:"강제 광고 제거", 7:"모든 광고 제거", 8:"자동업그레이드 팩", 9:"버프 팩",
+  10:"다이아 팩", 11:"광산 팩", 12:"VIP 패스",
+  13:"코어 100", 14:"코어 500", 15:"코어 1050", 16:"코어 3300",
+  17:"일일 코어 특가 750", 18:"주간 코어 특가 1750", 22:"주간 코어 특가 6000",
+  19:"Luxury 패스", 20:"Luxury 업그레이드", 21:"강화환생 1회권",
+  23:"스텝업 1단계", 24:"스텝업 2단계", 25:"스텝업 3단계", 26:"스텝업 4단계", 27:"스텝업 5단계",
+  28:"주간 총 상점 1", 29:"주간 총 상점 2", 30:"주간 총 상점 3",
+  // 다이아 첫 구매 2배 (원본 idx + 30)
+  31:"다이아 dia_0 (첫 구매 2배)", 32:"다이아 dia_1 (첫 구매 2배)",
+  33:"다이아 dia_2 (첫 구매 2배)", 34:"다이아 dia_3 (첫 구매 2배)",
+  35:"다이아 dia_4 (첫 구매 2배)"
+};
+function itemName(idx){ return ITEM_NAMES[idx] || ("알 수 없는 상품 #"+idx); }
+
 // Base64 / Base64URL 모두 허용 → 바이트 배열
 function b64ToBytes(s){
   const std = s.replace(/-/g,"+").replace(/_/g,"/");
@@ -502,6 +522,25 @@ function render(d){
   let packTable = '<table class="pack">';
   packs.forEach(p=>{ packTable += "<tr><td>"+esc(p[0])+"</td><td>"+fmtBool(p[1],"보유","미보유")+"</td></tr>"; });
   packTable += "</table>";
+
+  /* ── 구매 상품 이력 (PurchaseHistory: itemidx 배열, 구매 순) ── */
+  const hist = Array.isArray(d.PurchaseHistory) ? d.PurchaseHistory : [];
+  const histCount = {};
+  hist.forEach(i=>{ histCount[i]=(histCount[i]||0)+1; });
+  let histHtml = '<details open><summary>구매 상품 이력 '+hist.length+'건</summary>';
+  if(hist.length){
+    histHtml += '<table class="pack" style="margin-top:8px">';
+    Object.keys(histCount).sort((a,b)=>histCount[b]-histCount[a]).forEach(k=>{
+      histHtml += '<tr><td>'+esc(itemName(+k))+'</td><td>'+histCount[k]+'회</td></tr>';
+    });
+    histHtml += '</table>';
+    histHtml += '<div class="txn-list" style="margin-top:8px">'
+      + hist.map((i,n)=>(n+1)+'. '+esc(itemName(i))).join('<br>') + '</div>';
+  }else{
+    histHtml += '<div class="txn-list"><span class="no-v">기록 없음</span> <span class="sub-note">(이력 기능 추가 이전 버전에서의 구매는 포함되지 않습니다)</span></div>';
+  }
+  histHtml += '</details>';
+
   const txns = Array.isArray(d.ProcessedTxnIds) ? d.ProcessedTxnIds : [];
   let txnHtml = '<details><summary>처리된 결제 트랜잭션 '+txns.length+'건 (최근순 최대 50개 보관)</summary><div class="txn-list">'
     + (txns.length ? txns.map(t=>esc(t)).join("<br>") : '<span class="no-v">없음</span>') + "</div></details>";
@@ -511,7 +550,7 @@ function render(d){
     + row("일일 코어 특가", fmtDateUtcToKst(d.LastDailyCorePurchase_Date))
     + row("주간 코어 특가", fmtDateUtcToKst(d.LastWeeklyCorePurchase_Date))
     + row("주간 6000코어 특가", fmtDateUtcToKst(d.LastWeekly6000CorePurchase_Date))
-    + "</div>" + packTable + txnHtml + "</div>");
+    + "</div>" + packTable + histHtml + txnHtml + "</div>");
 
   /* 계정 */
   const pw = d.PlayFab_Password ? esc(d.PlayFab_Password) : "";
