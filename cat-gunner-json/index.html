@@ -20,7 +20,6 @@
     font-size:14px; line-height:1.5; padding:24px 16px 80px;
   }
   .wrap{max-width:1080px; margin:0 auto;}
-
   /* ── 헤더 / 입력 ── */
   header{display:flex; align-items:baseline; gap:10px; margin-bottom:14px;}
   header h1{font-size:20px; font-weight:800; letter-spacing:-.02em;}
@@ -52,14 +51,12 @@
     display:none; margin-top:10px; background:var(--danger-soft); color:var(--danger);
     border-radius:8px; padding:10px 12px; font-size:13px; font-weight:600;
   }
-
   /* ── 시각 표기 안내 ── */
   .legend{
     display:flex; flex-direction:column; gap:3px;
     font-size:12px; color:var(--sub); margin-bottom:20px; padding-left:2px;
   }
   .legend b{color:var(--ink); font-weight:700;}
-
   /* ── 요약 배지 스트립 ── */
   #summary-strip{display:none; flex-wrap:wrap; gap:8px; margin-bottom:20px;}
   .badge{
@@ -70,10 +67,10 @@
   .badge .dot{width:8px; height:8px; border-radius:50%; background:currentColor;}
   .badge.on-ok{background:var(--ok-soft); color:var(--ok);}
   .badge.on-danger{background:var(--danger-soft); color:var(--danger);}
+  .badge.on-warn{background:#FBF1DE; color:#B45309;}
   .badge.on-vip{background:var(--vip-soft); color:var(--vip);}
   .badge.on-lux{background:var(--lux-soft); color:var(--lux);}
   .badge.on-accent{background:var(--accent-soft); color:var(--accent);}
-
   /* ── 카드 그리드 ── */
   #result{display:none;}
   .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px;}
@@ -88,10 +85,13 @@
     display:flex; align-items:center; gap:6px;
   }
   .card h2::before{content:""; width:4px; height:14px; border-radius:2px; background:var(--accent);}
-  /* 타임해커 판정 카드 — 판정 중일 때만 붉은 강조 */
+  /* 타임해커 판정 카드 — 차단 중이면 붉은 강조, 경고 단계면 주황 */
   .card.danger{border-color:#F3BDBD; background:#FFFCFC;}
   .card.danger h2{color:var(--danger);}
   .card.danger h2::before{background:var(--danger);}
+  .card.warn{border-color:#F2D9A6; background:#FFFDF7;}
+  .card.warn h2{color:#B45309;}
+  .card.warn h2::before{background:#B45309;}
   .card-note{
     font-size:12px; color:var(--sub); margin-top:10px; padding-top:10px;
     border-top:1px dashed var(--line); line-height:1.6;
@@ -106,13 +106,31 @@
   .muted{color:var(--sub);}
   .sub-note{font-size:11px; color:var(--sub); font-family:inherit;}
   .sub-note.strong{color:var(--danger); font-weight:700;}
-
+  /* ── 타임해커 판독 ── */
+  .verdict{border-radius:8px; padding:12px 14px; margin-bottom:14px; font-size:13px; line-height:1.65;}
+  .verdict .t{font-weight:800; font-size:14px; margin-bottom:4px; letter-spacing:-.01em;}
+  .verdict ul{list-style:disc; margin:4px 0 0; padding-left:18px;}
+  .verdict li{margin:2px 0;}
+  .verdict.danger{background:var(--danger-soft); color:#7F1D1D;}
+  .verdict.warn{background:#FBF1DE; color:#78350F;}
+  .verdict.info{background:#EEF3FB; color:#1E3A8A;}
+  .verdict.ok{background:var(--ok-soft); color:#14532D;}
+  .th-ref{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--sub); margin-bottom:12px;}
+  .th-ref input{font:inherit; font-size:12px; padding:3px 6px; border:1px solid var(--line); border-radius:6px; color:var(--ink);}
+  .th-ref button{font:inherit; font-size:12px; padding:3px 9px; border:1px solid var(--line); border-radius:6px; background:#fff; cursor:pointer; color:var(--ink);}
+  .th-ref button:hover{background:var(--bg);}
+  .th-h3{font-size:12px; font-weight:800; color:var(--sub); letter-spacing:.02em; margin:16px 0 6px;}
+  table.th{width:100%; border-collapse:collapse; font-size:12.5px;}
+  table.th th{text-align:left; color:var(--sub); font-weight:700; padding:5px 8px; border-bottom:1px solid var(--line); white-space:nowrap;}
+  table.th td{padding:5px 8px; border-bottom:1px solid #F0F1F3; vertical-align:top; font-family:var(--mono);}
+  table.th td.plain{font-family:inherit;}
+  table.th tr.bad td{background:var(--danger-soft);}
+  table.th tr.bad td.plain{color:var(--danger); font-weight:700;}
   /* 구매 패키지 표 */
   table.pack{width:100%; border-collapse:collapse; font-size:13px;}
   table.pack td{padding:6px 4px; border-bottom:1px solid var(--line);}
   table.pack tr:last-child td{border-bottom:none;}
   table.pack td:last-child{text-align:right;}
-
   /* 트랜잭션 목록 */
   details{margin-top:10px;}
   details summary{cursor:pointer; font-size:13px; font-weight:700; color:var(--sub);}
@@ -138,7 +156,6 @@
   <header>
     <h1>Cat Gunner 세이브 데이터 뷰어</h1>
   </header>
-
   <div class="input-card">
     <textarea id="input" placeholder="세이브 데이터를 그대로 붙여넣으세요. (JSON · Base64 · GZ1)"></textarea>
     <div class="input-row">
@@ -148,14 +165,12 @@
     </div>
     <div id="error-box"></div>
   </div>
-
   <div class="legend">
-    <span>마지막 저장 · 타임해커 판정 시각 · 상점 특가 시각은 <b>UTC 기준으로 저장</b>되며, 화면에는 <b>한국시간(KST, UTC+9)</b>으로 환산해 표시합니다.</span>
+    <span>마지막 저장 · 타임해커 판정 시각 · 보상 장부 · 상점 특가 시각은 <b>UTC 기준으로 저장</b>되며, 화면에는 <b>한국시간(KST, UTC+9)</b>으로 환산해 표시합니다.</span>
     <span>출석체크 · 강화환생 · 온라인검사 실패일 등은 <b>기기 로컬 시간</b>으로 저장되므로 환산 없이 원본 그대로 표시합니다.</span>
+    <span>시간 신호 카드의 "미래" 판정은 <b>판독 기준 시각</b>(기본: 지금) 대비입니다. 유저가 세이브를 보낸 시각으로 맞추면 정확해집니다.</span>
   </div>
-
   <div id="summary-strip"></div>
-
   <div id="result">
     <div class="grid" id="grid"></div>
     <div class="card wide" style="margin-top:14px;">
@@ -164,7 +179,6 @@
     </div>
   </div>
 </div>
-
 <script>
 /* ───────────────── 디코딩 ─────────────────
    지원 형식 (구버전 · 신버전 모두)
@@ -176,7 +190,6 @@
    + 메일 본문을 통째로 붙여넣어도 압축 토큰만 추출
 ──────────────────────────────────────────── */
 const GZ_MARK = "GZ1:";
-
 /* ───────────────── 구매 상품 이력 매핑 ─────────────────
    itemidx → 상품명 (Shop_manager.ItemIdxFromProductId와 동일 매핑)
    ※ 게임 코드에 상품이 추가되면 여기도 함께 갱신할 것.
@@ -196,7 +209,6 @@ const ITEM_NAMES = {
   35:"다이아 dia_4 (첫 구매 2배)"
 };
 function itemName(idx){ return ITEM_NAMES[idx] || ("알 수 없는 상품 #"+idx); }
-
 // Base64 / Base64URL 모두 허용 → 바이트 배열
 function b64ToBytes(s){
   const std = s.replace(/-/g,"+").replace(/_/g,"/");
@@ -214,7 +226,6 @@ function tryParseJson(s){
   try{ const o = JSON.parse(s); return (o && typeof o === "object") ? o : null; }
   catch(e){ return null; }
 }
-
 // gzip 해제 (브라우저 내장 DecompressionStream)
 async function gunzipToText(bytes){
   if(typeof DecompressionStream === "undefined")
@@ -227,15 +238,12 @@ async function gunzipToText(bytes){
     throw new Error("압축 해제에 실패했습니다. 문자열이 중간에 잘렸거나 일부만 복사됐을 수 있습니다.");
   }
 }
-
 async function decodeInput(rawInput){
   let s = rawInput.trim();
   const backup = /\[BACKUP\]/i.test(s);
-
   // 1) 순수 JSON
   let o = tryParseJson(s);
   if(o) return {data:o, how:"JSON 원문", backup};
-
   // 2) URL 인코딩 해제 (GZ1%3A... 형태로 복사된 경우 포함)
   if(/%[0-9A-Fa-f]{2}/.test(s)){
     try{
@@ -245,7 +253,6 @@ async function decodeInput(rawInput){
       s = u;
     }catch(e){}
   }
-
   // 3) 압축본 — 메일 본문에 섞여 있어도 토큰만 뽑아낸다
   const m = s.match(new RegExp(GZ_MARK + "([A-Za-z0-9_\\-+/=\\s]+)"));
   if(m){
@@ -255,7 +262,6 @@ async function decodeInput(rawInput){
     if(o) return {data:o, how:"압축 해제(gzip) → JSON", backup};
     return null;
   }
-
   // 4) 구버전 무압축 Base64
   const b64 = s.replace(/\s+/g,"").replace(/^\[BACKUP\]/i,"");
   if(/^[A-Za-z0-9+/=_-]+$/.test(b64)){
@@ -266,7 +272,6 @@ async function decodeInput(rawInput){
   }
   return null;
 }
-
 /* ───────────────── 날짜/포맷 헬퍼 ───────────────── */
 const KST_LABEL = " (KST)";
 function parseDateAny(s){
@@ -300,14 +305,6 @@ function fmtDateUtcToKst(s, dateOnly, withUtc){
   let out = esc(ds+" "+ts)+KST_LABEL;
   if(withUtc) out += ' <span class="sub-note">UTC 원본 '+esc(String(s).replace(/Z$/,""))+"</span>";
   return out;
-}
-// 타임해커 증거용: UTC 원본을 앞세우고 KST 환산을 병기
-function fmtEvidenceTime(s){
-  if(s===undefined || s===null || s==="") return '<span class="no-v">기록 없음</span>';
-  const d = parseDateAny(s);
-  const rawTxt = esc(String(s).replace(/Z$/,""))+" UTC";
-  if(!d) return rawTxt+' <span class="sub-note">(파싱 불가 — 원본 표시)</span>';
-  return rawTxt+' <span class="sub-note">KST '+esc(toKstString(d,true))+"</span>";
 }
 // yyyyMMdd 등 "기기 로컬 날짜" 저장 필드 → 변환 없이 그대로
 function fmtDateRaw(s){
@@ -357,31 +354,330 @@ function fmtStageMax(v){
 }
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
-/* ───────────────── 타임해커 판정 헬퍼 ───────────────── */
-// 기기 시각 - 서버 시각 (시간 단위). 양수면 기기가 미래.
-function timeHackDiffHours(devStr, srvStr){
-  const d = parseDateAny(devStr), s = parseDateAny(srvStr);
-  if(!d || !s) return null;
-  return (d.getTime() - s.getTime()) / 3600000;
+/* ═══════════════════════════════════════════════════════════════
+   타임해커 판독
+   — 클라이언트 상수와 반드시 맞출 것 (Time_manager / Gamemanager)
+   ═══════════════════════════════════════════════════════════════ */
+const TH_TOL_SEC           = 30 * 60;   // Time_manager.GainToleranceSec
+const TH_STRIKE_TO_FLAG    = 2;         // Gamemanager.StrikeToFlag
+const TH_STRIKE_DECAY_DAYS = 60;        // Gamemanager.StrikeDecayDays
+const TH_OFFLINE_FLAG      = 5;         // Gamemanager.OfflineFlagThreshold
+
+let TH_REF = null;          // 판독 기준 시각 (null = 지금). 세이브를 받은 시각으로 맞추면 정확
+let TH_LAST_DATA = null;    // 기준 시각 바꿀 때 재렌더용
+
+function thRefNow(){ return TH_REF || new Date(); }
+function thSetRef(v){
+  const d = v ? new Date(v) : null;
+  TH_REF = (d && !isNaN(d)) ? d : null;
+  if(TH_LAST_DATA) render(TH_LAST_DATA);
 }
-function fmtDiffHours(h){
-  const abs = Math.abs(h);
-  let amount;
-  if(abs >= 24) amount = (abs/24).toFixed(1)+"일";
-  else if(abs >= 1) amount = abs.toFixed(1)+"시간";
-  else amount = Math.round(abs*60)+"분";
-  const dir = h >= 0 ? "기기가 미래 — 치트 이득 방향" : "기기가 과거 — 절전/시계정지 오탐 가능";
-  const cls = h >= 0 ? "warn-v" : "muted";
-  return '<span class="'+cls+'">'+(h>=0?"+":"-")+esc(amount)+'</span> <span class="sub-note">('+esc(dir)+")</span>";
+
+/* 파싱: "o"(ISO) · "yyyy-MM-dd HH:mm:ss"(+Z) · "yyyyMMdd" 모두 UTC 로 읽는다 */
+function thParse(s){
+  if(s === undefined || s === null) return null;
+  s = String(s).trim();
+  if(!s) return null;
+  let d = null, m;
+  if((m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/))){
+    let iso = s.replace(/(\.\d{3})\d+/, "$1");         // 소수 7자리 → 3자리 (사파리 호환)
+    if(!m[8]) iso += "Z";
+    d = new Date(iso);
+  }else if((m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})\s*Z?$/))){
+    d = new Date(Date.UTC(+m[1], +m[2]-1, +m[3], +m[4], +m[5], +m[6]));
+  }else if((m = s.match(/^(\d{4})(\d{2})(\d{2})$/))){
+    d = new Date(Date.UTC(+m[1], +m[2]-1, +m[3]));
+  }
+  if(!d || isNaN(d)) return null;
+  // 구버전 불교력(+543) 오염 보정
+  const y = d.getUTCFullYear(), ny = new Date().getUTCFullYear();
+  if(y - ny >= 400) d.setUTCFullYear(y - 543);
+  if(d.getUTCFullYear() < 2000) return null;        // 연도 1(미사용) 등
+  return d;
 }
-// FlagAsHacker에 넘긴 reason 문자열 해석
-function timeHackReasonLabel(reason){
-  const r = String(reason||"");
-  if(r.startsWith("wrong_time"))     return "기기 시계가 서버보다 크게 미래 (절대 오차 23시간 초과)";
-  if(r.startsWith("real_cheat"))     return "플레이 중 시계 점프 감지 (연속 측정 간 변화)";
-  if(r.startsWith("offline_streak")) return "온라인 시간검사 연속 실패 (오프라인 회피 패턴)";
-  if(r.startsWith("obscured_memory"))return "메모리 값 변조 감지 (ObscuredCheatingDetector)";
-  return null;
+function thKst(d){
+  if(!d) return null;
+  const k = new Date(d.getTime() + 9*3600e3);
+  return k.getUTCFullYear()+"-"+pad(k.getUTCMonth()+1)+"-"+pad(k.getUTCDate())+" "+pad(k.getUTCHours())+":"+pad(k.getUTCMinutes())+" KST";
+}
+function thDur(sec, signed){
+  if(sec === null || sec === undefined || isNaN(sec)) return "-";
+  const s = Math.abs(sec), sign = sec < 0 ? "−" : (signed ? "+" : "");
+  if(s < 3600)  return sign + Math.round(s/60) + "분";
+  if(s < 86400) return sign + (s/3600).toFixed(1) + "시간";
+  const dd = Math.floor(s/86400), hh = Math.round((s%86400)/3600);
+  return sign + dd + "일" + (hh ? " " + hh + "시간" : "");
+}
+function thSub(t){ return ' <span class="sub-note">'+esc(t)+'</span>'; }
+function thNo(t){  return '<span class="no-v">'+esc(t)+'</span>'; }
+function thWarn(t){return '<span class="warn-v">'+esc(t)+'</span>'; }
+function thOk(t){  return '<span class="yes">'+esc(t)+'</span>'; }
+
+function thKindLabel(k){
+  if(!k) return "-";
+  if(k === "daily") return "출석 보상";
+  if(k.startsWith("offline")) return "방치 보상" + (k.includes(":") ? " (" + k.split(":")[1] + ")" : "");
+  const map = { fish_free:"물고기 무료 가챠", mine_ticket:"광산 티켓 충전", adv_ticket:"어드벤처 티켓 충전", mission_daily:"일일 미션 리셋" };
+  return map[k] || k;
+}
+function thTrust(t){ return t === 2 ? "동기화" : t === 1 ? "추정" : t === 0 ? "미동기화" : "-"; }
+function thReasonKind(r){
+  if(!r) return "";
+  r = String(r);
+  if(r.startsWith("obscured_memory")) return "memory";
+  if(r.startsWith("offline_streak"))  return "offline";
+  if(r.startsWith("future_gain"))     return "future";
+  if(r.includes("wrong"))             return "wrong";
+  if(r.includes("cheat"))             return "real";
+  return "unknown";
+}
+function timeHackReasonLabel(r){
+  switch(thReasonKind(r)){
+    case "memory":  return "메모리 변조";
+    case "offline": return "오프라인 누적";
+    case "future":  return "시계 조작 보상 수령";
+    case "wrong":   return "시계 오차 (구버전)";
+    case "real":    return "시계 점프 (구버전)";
+    default: return "";
+  }
+}
+
+/* TimeStrike_Log: "서버시각|종류|+Xh|n=N;" 반복 */
+function thParseStrikes(log){
+  if(!log) return [];
+  return String(log).split(";").map(x => x.trim()).filter(Boolean).map(x => {
+    const p = x.split("|");
+    const ah = p[2] ? parseFloat(String(p[2]).replace(/[^\d.\-]/g, "")) : NaN;
+    const n  = p[3] ? parseInt(String(p[3]).replace(/[^\d]/g, ""), 10) : NaN;
+    return { server: thParse(p[0]), serverRaw: p[0] || "", kind: p[1] || "", aheadH: isNaN(ah) ? null : ah, count: isNaN(n) ? null : n };
+  });
+}
+
+/* 세이브 전체를 한 번 훑어 신호를 뽑는다 */
+function thAnalyze(d){
+  const now = thRefNow();
+  const a = {};
+  a.flagged    = !!d.is_TimeHacker;
+  a.reason     = d.TimeHack_Reason ? String(d.TimeHack_Reason) : "";
+  a.reasonKind = thReasonKind(a.reason);
+  a.flagDev    = thParse(d.TimeHack_FlagDate);
+  a.flagSrv    = thParse(d.TimeHack_ServerDate);
+  a.flagDiffSec= (a.flagDev && a.flagSrv) ? (a.flagDev - a.flagSrv)/1000 : null;
+  a.hasLegacyEvidence = !!(d.TimeHack_FlagDate || d.TimeHack_Reason || d.TimeHack_ServerDate);
+
+  a.strike     = +d.TimeStrike || 0;
+  a.strikes    = thParseStrikes(d.TimeStrike_Log);
+  a.strikeLast = thParse(d.TimeStrike_LastServer);
+
+  a.ledger = Array.isArray(d.TimeLedger) ? d.TimeLedger.map(e => {
+    const t = thParse(e && e.gameUtc);
+    return { kind: e && e.kind, trust: e && e.trust, session: e && e.session, mono: e && e.mono, t, aheadSec: t ? (t - now)/1000 : null };
+  }) : [];
+  a.ledgerFuture = a.ledger.filter(e => e.aheadSec !== null && e.aheadSec > TH_TOL_SEC);
+
+  a.offStreak  = +d.OfflineFailStreak || 0;
+  a.offLast    = thParse(d.OfflineFailLastDate);
+
+  a.lastSave   = thParse(d.LastSaveTime);
+  a.lastSaveAheadSec = a.lastSave ? (a.lastSave - now)/1000 : null;
+  a.floor      = thParse(d.LastTrustedUtc);
+  a.floorAheadSec = a.floor ? (a.floor - now)/1000 : null;
+  a.offsetSec  = (typeof d.SavedOffsetSec === "number") ? d.SavedOffsetSec : null;   // server − device
+  a.hasOffset  = !!d.HasSavedOffset;
+
+  a.dia = +d.Dia || 0;
+  const g = +d._getDia || 0, u = +d._useDia || 0;
+  a.diaExpected = Math.trunc(g/3) - Math.trunc(u/3);
+  a.diaMismatch = (d.Dia !== undefined && d._getDia !== undefined) && a.dia !== a.diaExpected;
+
+  a.anySignal = a.flagged || a.hasLegacyEvidence || a.strike > 0 || a.ledger.length > 0 || a.diaMismatch
+             || (a.lastSaveAheadSec !== null && a.lastSaveAheadSec > TH_TOL_SEC)
+             || (a.floorAheadSec !== null && a.floorAheadSec > TH_TOL_SEC)
+             || a.offStreak >= 3;
+  return a;
+}
+
+/* 판독 결론 */
+function thVerdict(a){
+  const L = []; let level = "info", title = "";
+  const add = s => L.push(s);
+  const devDir = sec => sec > 20*3600 ? " → 기기를 미래로 돌린 것으로 보임"
+                      : (sec < 0 || sec < 4*3600) ? " → 절전·VM 시계 점프 오탐 가능성"
+                      : " → 판단 애매";
+
+  if(a.flagged){
+    level = "danger";
+    switch(a.reasonKind){
+      case "memory":
+        title = "메모리 변조 감지 → 랭킹 차단";
+        add("ObscuredInt 값이 외부 도구(메모리 에디터)로 수정된 흔적. 시계와 무관하고 오탐 여지가 거의 없음 → 사면 부적합");
+        break;
+      case "future":
+        title = "시계 조작 후 보상 수령 " + (a.strike || "?") + "회 확정 → 랭킹 차단";
+        add("서버 시각보다 미래에 받은 보상이 서로 다른 동기화 시점에 " + TH_STRIKE_TO_FLAG + "회 이상 확인됨. 시계를 고친 정상 유저는 1회에서 끝나므로 재발은 조작으로 판단");
+        if(a.strikes.length) add("스트라이크 내역은 아래 표 참고 — 앞선 시간이 20시간 이상이면 출석·일일 단위, 그 이하면 방치보상 단위 조작");
+        break;
+      case "offline":
+        title = "오프라인 누적 " + a.offStreak + "일 → 랭킹 차단";
+        add("온라인 시간검사가 서로 다른 접속일 " + TH_OFFLINE_FLAG + "일 연속 실패. 장기 비행기모드·무인터넷 기기 등 정상 유저도 걸릴 수 있는 규칙");
+        add((a.strike === 0 && !a.ledgerFuture.length && !a.diaMismatch)
+          ? "시간 경고·미래 시각 보상·다이아 정합성 모두 깨끗함 → 사면 검토 가능"
+          : "다른 신호가 함께 있음 → 사면 신중 (아래 추가 신호 참고)");
+        break;
+      case "wrong": case "real":
+        title = "구버전 시계 오차 판정 → 랭킹 차단";
+        if(a.flagDiffSec !== null) add("판정 당시 기기−서버 차이 " + thDur(a.flagDiffSec, true) + devDir(a.flagDiffSec));
+        else add("서버 시각 기록이 없어 차이 계산 불가");
+        add("현재 버전은 이 사유로 차단하지 않고 교정만 함 → 사면 검토 가능");
+        break;
+      default:
+        title = "타임해커 차단 (사유: " + (a.reason || "기록 없음") + ")";
+        add(a.reason ? "알 수 없는 사유 문자열 — 클라 버전 확인" : "증거 기록 기능 이전 버전에서 판정됨 → 근거 확인 불가, 사면 검토 가능");
+    }
+  }else if(a.diaMismatch){
+    level = "danger";
+    title = "다이아 정합성 불일치 → 랭킹 차단 중";
+    add("보유 " + a.dia + " ≠ 기대값 " + a.diaExpected + " (획득 누계 − 사용 누계). 세이브 편집 또는 메모리 변조 흔적");
+  }else if(a.strike > 0){
+    level = "warn";
+    title = "시간 경고 " + a.strike + "회 — 시계를 앞당긴 상태로 보상 수령 이력";
+    add("1회는 '느리던 시계를 고친 정상 유저'일 수 있어 차단하지 않고 날짜만 교정함. " + TH_STRIKE_TO_FLAG + "회째에 차단");
+    if(a.strikeLast){
+      const left = TH_STRIKE_DECAY_DAYS - (thRefNow() - a.strikeLast)/86400e3;
+      add(left > 0 ? "감쇠까지 " + Math.ceil(left) + "일 (무사고 시 0회로 초기화)" : "감쇠 기간 경과 — 다음 동기화 때 0회로 초기화됨");
+    }
+  }else if(a.ledgerFuture.length){
+    level = "warn";
+    title = "미대조 보상 중 미래 시각 " + a.ledgerFuture.length + "건";
+    add("기준 시각보다 30분 이상 미래에 받은 것으로 기록됨. 기기가 다음에 서버 시각을 받으면 " + (a.strike + 1 >= TH_STRIKE_TO_FLAG ? "차단" : "경고 1회") + " 예정");
+    add("판독이 늦어질수록 '미래'가 사라지므로 기준 시각을 세이브 수신 시각으로 맞춰 다시 확인 권장");
+  }else if(a.lastSaveAheadSec !== null && a.lastSaveAheadSec > TH_TOL_SEC){
+    level = "warn";
+    title = "저장 시각이 기준 시각보다 " + thDur(a.lastSaveAheadSec) + " 미래";
+    add("기기 시계를 앞당긴 상태에서 저장됨. 보상 수령 기록이 없으면 제재 대상은 아니지만 조작 시도 흔적");
+  }else if(a.floorAheadSec !== null && a.floorAheadSec > TH_TOL_SEC){
+    level = "info";
+    title = "floor(마지막 신뢰 시각)가 기준 시각보다 " + thDur(a.floorAheadSec) + " 미래";
+    add("과거에 시계를 앞당긴 흔적. 다음 동기화에서 자동 교정되며 제재 없음");
+  }else if(a.hasLegacyEvidence){
+    level = "ok";
+    title = "과거 타임해커 판정 — 현재 해제됨 (사면)";
+    add("아래는 판정 당시 기록");
+  }else if(a.ledger.length){
+    level = "info";
+    title = "미대조 보상 " + a.ledger.length + "건 (시각 정상 범위)";
+    add("마지막 서버 동기화 이후 오프라인에서 받은 보상. 다음 동기화 때 대조되며 현재로선 이상 없음");
+  }else if(a.offStreak >= 3){
+    level = "info";
+    title = "오프라인 누적 " + a.offStreak + "/" + TH_OFFLINE_FLAG + "일";
+    add(TH_OFFLINE_FLAG + "일째에 랭킹 차단됨. 온라인 검사 1회 성공 시 0으로 초기화");
+  }else{
+    level = "ok"; title = "이상 신호 없음";
+  }
+
+  /* 보조 신호 — 결론에 쓰이지 않은 것만 */
+  const extra = [];
+  if(a.diaMismatch && !title.startsWith("다이아")) extra.push("다이아 정합성 불일치 (" + a.dia + " ≠ " + a.diaExpected + ")");
+  if(a.strike > 0 && a.reasonKind !== "future" && !title.startsWith("시간 경고")) extra.push("시간 경고 " + a.strike + "회");
+  if(a.ledgerFuture.length && !title.startsWith("미대조 보상 중")) extra.push("미래 시각 보상 " + a.ledgerFuture.length + "건 (미대조)");
+  if(a.lastSaveAheadSec > TH_TOL_SEC && !title.startsWith("저장 시각")) extra.push("저장 시각 미래 " + thDur(a.lastSaveAheadSec));
+  if(a.floorAheadSec > TH_TOL_SEC && !title.startsWith("floor")) extra.push("floor 미래 " + thDur(a.floorAheadSec));
+  if(a.offsetSec !== null && Math.abs(a.offsetSec) > 20*3600) extra.push("마지막 동기화 때 기기 시계가 서버보다 " + thDur(-a.offsetSec, true) + " (교정됨, 제재 아님)");
+  if(a.flagged && a.offStreak > 0 && a.reasonKind !== "offline") extra.push("오프라인 누적 " + a.offStreak + "일");
+  if(extra.length) add("추가 신호: " + extra.join(" · "));
+
+  return { level, title, lines: L };
+}
+
+/* 타임해커 판독 카드 — 신호가 하나라도 있을 때만 노출 */
+function timeHackCard(d){
+  const a = thAnalyze(d);
+  if(!a.anySignal) return "";
+  const v = thVerdict(a);
+  const cls = (a.flagged || a.diaMismatch) ? " danger" : (v.level === "warn" ? " warn" : "");
+  const title = a.flagged ? "타임해커 판정 상세 (현재 랭킹 차단)"
+              : a.diaMismatch ? "변조 의심 (현재 랭킹 차단)"
+              : a.hasLegacyEvidence ? "타임해커 판정 이력 (현재는 해제됨)"
+              : "시간 신호 점검";
+
+  /* 기준 시각 */
+  let refVal = "";
+  if(TH_REF){ const r = TH_REF; refVal = r.getFullYear()+"-"+pad(r.getMonth()+1)+"-"+pad(r.getDate())+"T"+pad(r.getHours())+":"+pad(r.getMinutes()); }
+  const refHtml = '<div class="th-ref"><span>판독 기준 시각</span>'
+    + '<input type="datetime-local" value="'+refVal+'" onchange="thSetRef(this.value)">'
+    + '<button type="button" onclick="thSetRef(\'\')">지금으로</button>'
+    + '<span>· 세이브를 받은 시각으로 맞추면 "미래" 판정이 정확해집니다 (현재 기준: '+esc(thKst(thRefNow()))+')</span></div>';
+
+  /* 결론 */
+  const verdictHtml = '<div class="verdict '+v.level+'"><div class="t">'+esc(v.title)+'</div>'
+    + (v.lines.length ? '<ul>'+v.lines.map(x => '<li>'+esc(x)+'</li>').join("")+'</ul>' : "") + '</div>';
+
+  /* 상태 행 */
+  let rows = "";
+  rows += row("현재 상태", a.flagged ? thWarn("⚠ 판정 중 — 랭킹 차단")
+    : a.diaMismatch ? thWarn("⚠ 다이아 정합성 불일치 — 랭킹 차단")
+    : a.hasLegacyEvidence ? thOk("✓ 해제됨 (사면 처리)") + thSub("아래는 과거 판정 당시 기록")
+    : thOk("차단 없음"));
+
+  if(a.flagged || a.hasLegacyEvidence){
+    const rl = timeHackReasonLabel(a.reason);
+    rows += row("판정 사유", (a.reason ? esc(a.reason) : thNo("기록 없음")) + (rl ? thSub(rl) : ""));
+    rows += row("판정 시각 (기기 시계)", a.flagDev ? esc(thKst(a.flagDev)) + thSub("원본 " + (d.TimeHack_FlagDate || "")) : thNo("기록 없음"));
+    rows += row("판정 시각 (서버)", a.flagSrv ? esc(thKst(a.flagSrv))
+      : thNo("기록 없음") + thSub("온라인 응답을 못 받은 경로 (오프라인 누적 · 메모리 변조 · 장부 대조)"));
+    rows += row("기기 − 서버 차이", a.flagDiffSec === null ? thNo("계산 불가")
+      : (a.flagDiffSec > 20*3600 ? thWarn(thDur(a.flagDiffSec, true)) : esc(thDur(a.flagDiffSec, true))));
+  }
+
+  rows += row("시간 경고", (a.strike > 0 ? thWarn(a.strike + "회") : thOk("0회")) + thSub("/ " + TH_STRIKE_TO_FLAG + "회 차단"
+    + (a.strikeLast ? " · 마지막 " + thKst(a.strikeLast) : "")));
+  rows += row("미대조 보상", a.ledger.length
+    ? esc(a.ledger.length + "건") + (a.ledgerFuture.length ? " " + thWarn("미래 시각 " + a.ledgerFuture.length + "건") : "")
+    : thOk("없음"));
+  rows += row("다이아 정합성", a.diaMismatch
+    ? thWarn("불일치") + thSub("보유 " + a.dia + " · 기대 " + a.diaExpected)
+    : thOk("일치") + thSub("보유 " + a.dia));
+  rows += row("오프라인 누적", (a.offStreak >= 3 ? thWarn(a.offStreak + "일") : esc(a.offStreak + "일"))
+    + thSub("/ " + TH_OFFLINE_FLAG + "일 차단" + (a.offLast ? " · 마지막 카운트 " + thKst(a.offLast).slice(0,10) : "")));
+  rows += row("마지막 저장 (게임 시각)", a.lastSave
+    ? esc(thKst(a.lastSave)) + (a.lastSaveAheadSec > TH_TOL_SEC ? " " + thWarn("기준보다 " + thDur(a.lastSaveAheadSec) + " 미래") : "")
+    : thNo("기록 없음"));
+  rows += row("floor (마지막 신뢰 시각)", a.floor
+    ? esc(thKst(a.floor)) + (a.floorAheadSec > TH_TOL_SEC ? " " + thWarn("기준보다 " + thDur(a.floorAheadSec) + " 미래") : "")
+    : thNo("기록 없음"));
+  rows += row("서버 오프셋", a.hasOffset && a.offsetSec !== null
+    ? esc(thDur(a.offsetSec, true)) + thSub("서버 − 기기 · 절댓값이 크면 기기 시계가 틀려 있던 것 (교정됨)")
+    : thNo("동기화 이력 없음") + thSub("신버전 클라라면 시간 보상이 아직 열리지 않은 상태 · 구버전 세이브에는 이 필드가 없음"));
+
+  /* 스트라이크 표 */
+  let strikeHtml = "";
+  if(a.strikes.length){
+    strikeHtml = '<div class="th-h3">시간 경고 내역 (TimeStrike_Log)</div><table class="th"><tr><th>#</th><th>동기화 시각 (서버)</th><th>보상 종류</th><th>앞선 시간</th><th>건수</th><th>해석</th></tr>';
+    a.strikes.forEach((s, i) => {
+      const interp = s.aheadH === null ? "-" : s.aheadH >= 20 ? "일 단위 조작 (출석·일일 리셋)" : "시간 단위 (방치보상·티켓)";
+      strikeHtml += '<tr class="bad"><td>'+(i+1)+'</td><td>'+esc(s.server ? thKst(s.server) : s.serverRaw)+'</td><td class="plain">'+esc(thKindLabel(s.kind))+'</td><td>'+esc(s.aheadH === null ? "-" : "+" + s.aheadH.toFixed(1) + "h")+'</td><td>'+esc(s.count === null ? "-" : s.count)+'</td><td class="plain">'+esc(interp)+'</td></tr>';
+    });
+    strikeHtml += '</table>';
+  }
+
+  /* 장부 표 */
+  let ledgerHtml = "";
+  if(a.ledger.length){
+    ledgerHtml = '<div class="th-h3">미대조 보상 장부 (TimeLedger)</div><table class="th"><tr><th>#</th><th>보상 종류</th><th>기록 시각 (게임)</th><th>기준 대비</th><th>신뢰</th><th>세션</th><th>판정</th></tr>';
+    a.ledger.forEach((e, i) => {
+      const bad = e.aheadSec !== null && e.aheadSec > TH_TOL_SEC;
+      ledgerHtml += '<tr'+(bad ? ' class="bad"' : '')+'><td>'+(i+1)+'</td><td class="plain">'+esc(thKindLabel(e.kind))+'</td><td>'+esc(e.t ? thKst(e.t) : "(파싱 실패)")+'</td><td>'+esc(e.aheadSec === null ? "-" : thDur(e.aheadSec, true))+'</td><td class="plain">'+esc(thTrust(e.trust))+'</td><td>'+esc(e.session ? String(e.session).slice(0,4) : "-")+'</td><td class="plain">'+(bad ? "⚠ 미래 시각" : "정상")+'</td></tr>';
+    });
+    ledgerHtml += '</table>';
+  }
+
+  const note = '<div class="card-note">'
+    + '판정·저장·장부 시각은 <b>게임이 믿고 있던 시각(UTC)</b>이라 조작된 값이 그대로 남습니다. '
+    + '"미래"는 기준 시각 대비이며, 허용오차 ' + (TH_TOL_SEC/60) + '분은 클라와 동일합니다. '
+    + '세션 ID가 같은 장부 항목은 한 번의 실행 안에서 받은 것입니다.'
+    + '</div>';
+
+  return '<div class="card wide'+cls+'"><h2>'+esc(title)+'</h2>'+refHtml+verdictHtml+'<div class="kv">'+rows+'</div>'+strikeHtml+ledgerHtml+note+'</div>';
 }
 
 /* ───────────────── 렌더링 ───────────────── */
@@ -390,15 +686,12 @@ function row(k, vHtml){ return '<div class="k">'+esc(k)+'</div><div class="v">'+
 function card(title, rowsHtml, wide){
   return '<div class="card'+(wide?" wide":"")+'"><h2>'+esc(title)+'</h2><div class="kv">'+rowsHtml+'</div></div>';
 }
-
 async function analyze(){
   const errBox = document.getElementById("error-box");
   const note = document.getElementById("decode-note");
   errBox.style.display="none"; note.textContent="";
-
   const raw = document.getElementById("input").value;
   if(!raw.trim()){ showError("데이터를 붙여넣은 뒤 분석하기를 눌러 주세요."); return; }
-
   let decoded;
   try{
     note.textContent = "해석 중…";
@@ -408,69 +701,28 @@ async function analyze(){
     showError(e.message || "데이터 해석 중 오류가 발생했습니다.");
     return;
   }
-
   if(!decoded){
     note.textContent = "";
     showError("데이터를 해석할 수 없습니다. JSON 전체 · Base64 · GZ1: 압축본 중 하나가 온전히 복사됐는지 확인해 주세요. (앞뒤 일부만 복사되면 실패합니다)");
     return;
   }
-
   note.textContent = "해석 방식: " + decoded.how
     + (decoded.backup ? "  ·  ⚠ 백업 파일에서 읽힌 데이터" : "");
   render(decoded.data);
 }
-
-/* 타임해커 판정 상세 카드 — 판정 중이거나 과거 판정 기록이 있을 때만 노출 */
-function timeHackCard(d){
-  const flagged = !!d.is_TimeHacker;
-  const hasEvidence = !!(d.TimeHack_FlagDate || d.TimeHack_Reason || d.TimeHack_ServerDate);
-  if(!flagged && !hasEvidence) return "";
-
-  const title = flagged ? "타임해커 판정 상세 (현재 랭킹 차단)"
-                        : "타임해커 판정 이력 (현재는 해제됨)";
-
-  let rows = "";
-  rows += row("현재 상태", flagged
-    ? '<span class="warn-v">⚠ 판정 중 — 랭킹 차단</span>'
-    : '<span class="yes">✓ 해제됨 (사면 처리)</span> <span class="sub-note">아래는 과거 판정 당시 기록</span>');
-
-  if(hasEvidence){
-    const reasonLabel = timeHackReasonLabel(d.TimeHack_Reason);
-    rows += row("판정 사유", (d.TimeHack_Reason ? esc(d.TimeHack_Reason) : '<span class="no-v">기록 없음</span>')
-      + (reasonLabel ? ' <span class="sub-note">'+esc(reasonLabel)+"</span>" : ""));
-    rows += row("판정 시각 (기기 시계)", fmtEvidenceTime(d.TimeHack_FlagDate));
-    rows += row("판정 시각 (서버)", d.TimeHack_ServerDate
-      ? fmtEvidenceTime(d.TimeHack_ServerDate)
-      : '<span class="no-v">기록 없음</span> <span class="sub-note">온라인 응답을 못 받은 경로 (오프라인 누적 · 메모리 변조)</span>');
-
-    const diff = timeHackDiffHours(d.TimeHack_FlagDate, d.TimeHack_ServerDate);
-    rows += row("기기 − 서버 차이", diff===null
-      ? '<span class="no-v">계산 불가</span> <span class="sub-note">서버 시각이 없으면 차이를 낼 수 없습니다</span>'
-      : fmtDiffHours(diff));
-  }else{
-    rows += row("판정 시각", '<span class="no-v">기록 없음</span> <span class="sub-note strong">증거 기록 기능 추가 이전 버전에서 판정된 유저</span>');
-  }
-
-  rows += row("온라인검사 실패 누적", fmtNum(d.OfflineFailStreak)+'일 <span class="sub-note">마지막 카운트 '+fmtDateRaw(d.OfflineFailLastDate)+" · 기기 로컬</span>");
-  rows += row("마지막 저장", fmtDateUtcToKst(d.LastSaveTime, false, true));
-
-  const note = '<div class="card-note">'
-    + '판정 시각은 <b>기기 시계 기준 UTC</b>라 조작된 값 그대로 저장됩니다. 서버 시각과의 차이가 양수면 기기를 미래로 돌린 것이고, '
-    + '음수이거나 몇 시간 수준이면 절전·VM 시계 점프에 의한 오탐일 수 있습니다.'
-    + '</div>';
-
-  return '<div class="card wide'+(flagged?" danger":"")+'"><h2>'+esc(title)+'</h2><div class="kv">'+rows+"</div>"+note+"</div>";
-}
-
 function render(d){
+  TH_LAST_DATA = d;
   /* 요약 배지 */
   const strip = document.getElementById("summary-strip");
   let badges = "";
-  if(d.is_TimeHacker){
-    const r = d.TimeHack_Reason ? " · "+d.TimeHack_Reason : "";
-    badges += badge("⚠ 타임해커 판정"+r, "on-danger");
-  }else if(d.TimeHack_FlagDate || d.TimeHack_Reason){
-    badges += badge("타임해커 판정 이력 (해제됨)", "on-accent");
+  {
+    const th = thAnalyze(d);
+    if(th.flagged)                      badges += badge("⚠ 타임해커 차단 · "+(timeHackReasonLabel(th.reason)||th.reason||"사유 없음"), "on-danger");
+    else if(th.diaMismatch)             badges += badge("⚠ 다이아 정합성 불일치", "on-danger");
+    else if(th.strike > 0)              badges += badge("시간 경고 "+th.strike+"회", "on-warn");
+    else if(th.ledgerFuture.length)     badges += badge("미래 시각 보상 "+th.ledgerFuture.length+"건", "on-warn");
+    else if(th.lastSaveAheadSec > TH_TOL_SEC) badges += badge("저장 시각 미래", "on-warn");
+    else if(th.hasLegacyEvidence)       badges += badge("타임해커 판정 이력 (해제됨)", "on-accent");
   }
   badges += badge(d.Mission_is_Vip ? "VIP 패스" : "VIP 미보유", d.Mission_is_Vip ? "on-vip":"");
   badges += badge(d.Mission_is_Luxury ? "Luxury 패스" : "Luxury 미보유", d.Mission_is_Luxury ? "on-lux":"");
@@ -489,12 +741,9 @@ function render(d){
   badges += badge("결제 "+(d.PurchaseCount||0)+"회", (d.PurchaseCount>0)?"on-accent":"");
   strip.innerHTML = badges;
   strip.style.display = "flex";
-
   const g = [];
-
-  /* 타임해커 판정 상세 — 최상단 (해당 유저만 노출) */
+  /* 타임해커 판독 — 최상단 (신호 있는 유저만 노출) */
   g.push(timeHackCard(d));
-
   /* 기본 정보 */
   g.push(card("기본 정보",
     row("게임 버전", esc(d.BundleCode||"-")) +
@@ -507,7 +756,6 @@ function render(d){
       : fmtBool(false,"","정상")) +
     row("온라인검사 실패 누적", fmtNum(d.OfflineFailStreak)+'일 <span class="sub-note">마지막: '+fmtDateRaw(d.OfflineFailLastDate)+" · 기기 로컬</span>")
   ));
-
   /* 상점 / 구매 — 비소모성 상품 전체 */
   const packs = [
     ["VIP 패스", d.Mission_is_Vip],
@@ -522,7 +770,6 @@ function render(d){
   let packTable = '<table class="pack">';
   packs.forEach(p=>{ packTable += "<tr><td>"+esc(p[0])+"</td><td>"+fmtBool(p[1],"보유","미보유")+"</td></tr>"; });
   packTable += "</table>";
-
   /* ── 구매 상품 이력 (PurchaseHistory: itemidx 배열, 구매 순) ── */
   const hist = Array.isArray(d.PurchaseHistory) ? d.PurchaseHistory : [];
   const histCount = {};
@@ -540,7 +787,6 @@ function render(d){
     histHtml += '<div class="txn-list"><span class="no-v">기록 없음</span> <span class="sub-note">(이력 기능 추가 이전 버전에서의 구매는 포함되지 않습니다)</span></div>';
   }
   histHtml += '</details>';
-
   const txns = Array.isArray(d.ProcessedTxnIds) ? d.ProcessedTxnIds : [];
   let txnHtml = '<details><summary>처리된 결제 트랜잭션 '+txns.length+'건 (최근순 최대 50개 보관)</summary><div class="txn-list">'
     + (txns.length ? txns.map(t=>esc(t)).join("<br>") : '<span class="no-v">없음</span>') + "</div></details>";
@@ -551,7 +797,6 @@ function render(d){
     + row("주간 코어 특가", fmtDateUtcToKst(d.LastWeeklyCorePurchase_Date))
     + row("주간 6000코어 특가", fmtDateUtcToKst(d.LastWeekly6000CorePurchase_Date))
     + "</div>" + packTable + histHtml + txnHtml + "</div>");
-
   /* 계정 */
   const pw = d.PlayFab_Password ? esc(d.PlayFab_Password) : "";
   g.push(card("계정 (PlayFab)",
@@ -559,7 +804,6 @@ function render(d){
     row("이메일", esc(d.PlayFab_Email||"-")) +
     row("비밀번호", pw ? '<span id="pw-mask">••••••••</span><span id="pw-real" style="display:none">'+pw+'</span><button class="pw-btn" onclick="togglePw(this)">보기</button>' : '<span class="no-v">없음</span>')
   ));
-
   /* 재화 */
   g.push(card("보유 재화",
     row("골드", fmtInfVal(d.Money)) +
@@ -569,7 +813,6 @@ function render(d){
     row("펫 코인", fmtNum(d.PetCoin)) +
     row("탐험 코어", Array.isArray(d.Adventure_Currency_Core)? esc(d.Adventure_Currency_Core.join(" / ")) : '<span class="no-v">-</span>')
   ));
-
   /* 진행도 */
   g.push(card("진행도",
     row("메인 스테이지", fmtStagePair(d.Stage_Now, d.Level_Now)) +
@@ -581,7 +824,6 @@ function render(d){
     row("탐험 레벨", fmtNum(d.Adventure_Lv)+' <span class="sub-note">Exp '+fmtNum(d.Adventure_Exp)+" · 티켓 "+fmtNum(d.Adventure_Ticket_Now)+"</span>") +
     row("보유 총 / 펫", countTrue(d.Gun_Collect)+"종 도감 / "+countTrue(d.Pet_Collect)+"종 도감")
   ));
-
   /* 시즌패스 / 미션 */
   const missionCnt = Array.isArray(d.Mission_ExpGet) ? d.Mission_ExpGet.length : 0;
   g.push(card("시즌패스 · 미션",
@@ -596,7 +838,6 @@ function render(d){
     row("패스 보상 수령", "일반 "+countTrue(d.NormalReward_Get)+"개 · 에픽 "+countTrue(d.EpicReward_Get)+"개") +
     row("미션 진행값", "나무 "+fmtNum(d.Mission_TreeCount_Value)+" · 클리어 "+fmtNum(d.Mission_StageClear_Value)+" · 환생 "+fmtNum(d.Mission_Rebirth_Value)+" · 광산 "+fmtNum(d.Mission_PlayMine_Value))
   ));
-
   /* 강화환생 / 프리캐시 */
   g.push(card("강화환생 · 프리캐시",
     row("강화환생(광고) 오늘 사용", fmtNum(d.UpgradeRebirth_UseCount)+"회") +
@@ -606,7 +847,6 @@ function render(d){
     row("리워드 광고 제거 혜택", fmtBool(d.FreeCash_RewardAdRemoved,"적용 중","없음")) +
     row("프리캐시 팝업 로그", fmtBool(d.FreeCash_PopLogSent,"전송됨","미전송"))
   ));
-
   /* 기타 콘텐츠 */
   g.push(card("기타 콘텐츠",
     row("낚시 무료 뽑기", fmtNum(d.FreeGachaCount)+'회 <span class="sub-note">기준일: '+fmtDateUtcToKst(d.Free_GachaDate,true)+"</span>") +
@@ -618,12 +858,10 @@ function render(d){
     row("유물", Array.isArray(d.Relics) ? d.Relics.filter(r=>r&&r.is_Unlock).length+"종 해금" : '<span class="no-v">-</span>') +
     row("설정", "BGM "+(d.BGM_Mute?"음소거":"켜짐")+" / 효과음 "+(d.SFX_Mute?"음소거":"켜짐"))
   ));
-
   document.getElementById("grid").innerHTML = g.join("");
   document.getElementById("raw-json").textContent = JSON.stringify(d, null, 2);
   document.getElementById("result").style.display = "block";
 }
-
 function togglePw(btn){
   const mask = document.getElementById("pw-mask"), real = document.getElementById("pw-real");
   const showing = real.style.display !== "none";
