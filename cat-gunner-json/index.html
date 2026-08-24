@@ -144,6 +144,14 @@
     border:1px solid var(--line); border-radius:8px; padding:12px;
     font-family:var(--mono); font-size:11px; line-height:1.6;
   }
+  /* ── 원본 Base64 / JSON 복사 도구 ── */
+  .raw-tools{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;}
+  .raw-tools button.ghost{padding:6px 12px; font-size:12px; color:var(--ink);}
+  .raw-tools .sub-note{margin-left:2px;}
+  textarea.b64{
+    margin-top:8px; min-height:160px; max-height:420px; font-size:11px; line-height:1.6;
+    word-break:break-all; background:#FAFBFC;
+  }
   .pw-btn{
     border:none; background:var(--no-soft); color:var(--sub); border-radius:6px;
     padding:2px 8px; font-size:11px; cursor:pointer; margin-left:6px;
@@ -175,7 +183,26 @@
     <div class="grid" id="grid"></div>
     <div class="card wide" style="margin-top:14px;">
       <h2>원본 JSON</h2>
+      <div class="raw-tools">
+        <button class="ghost" onclick="copyText(LAST_JSON, this)">JSON 복사</button>
+        <button class="ghost" onclick="downloadText(LAST_JSON, rawFileName('json'))">.json 저장</button>
+      </div>
       <details><summary>전체 데이터 펼치기</summary><pre class="raw" id="raw-json"></pre></details>
+    </div>
+    <div class="card wide" style="margin-top:14px;">
+      <h2>원본 Base64 (세이브 파일 형식)</h2>
+      <div class="raw-tools">
+        <button class="ghost" onclick="copyText(LAST_B64, this)">Base64 복사</button>
+        <button class="ghost" onclick="downloadText(LAST_B64, rawFileName('txt'))">파일로 저장</button>
+        <span class="sub-note" id="b64-note"></span>
+      </div>
+      <details><summary>Base64 펼치기</summary><textarea class="b64" id="raw-b64" readonly spellcheck="false"></textarea></details>
+      <div class="card-note">
+        게임이 기기에 저장하는 세이브 파일 내용과 같은 형식(<b>Base64(JSON)</b>, 압축 없음)입니다.
+        이 문자열을 그대로 세이브 파일에 넣으면 해당 유저 상태로 플레이해 볼 수 있습니다.
+        GZ1 압축본은 압축 해제한 바이트를 그대로 인코딩하므로 원본 파일과 바이트 단위로 동일하고, JSON 원문을 붙여넣은 경우는 그 텍스트를 UTF-8로 인코딩한 값입니다.
+        <b>[BACKUP]</b> 접두사는 제외되어 있습니다.
+      </div>
     </div>
   </div>
 </div>
@@ -188,8 +215,11 @@
      4) Base64(JSON)                     ← 구버전 무압축
    + "[BACKUP] " 접두사 자동 처리
    + 메일 본문을 통째로 붙여넣어도 압축 토큰만 추출
+   → 어떤 형식으로 들어와도 세이브 파일 형식인 Base64(JSON)을 함께 돌려준다 (b64)
 ──────────────────────────────────────────── */
 const GZ_MARK = "GZ1:";
+let LAST_B64 = "";     // 세이브 파일 형식(Base64(JSON)) — 복사/저장용
+let LAST_JSON = "";    // 원본 JSON 텍스트 (재직렬화 아님)
 /* ───────────────── 구매 상품 이력 매핑 ─────────────────
    itemidx → 상품명 (Shop_manager.ItemIdxFromProductId와 동일 매핑)
    ※ 게임 코드에 상품이 추가되면 여기도 함께 갱신할 것.
@@ -222,18 +252,32 @@ function b64ToBytes(s){
 function b64ToUtf8(s){
   return new TextDecoder("utf-8").decode(b64ToBytes(s));
 }
+// 바이트 배열 → 표준 Base64 (패딩 포함, C# Convert.ToBase64String과 동일 출력)
+function bytesToB64(bytes){
+  let bin = "";
+  const CH = 0x8000;
+  for(let i=0;i<bytes.length;i+=CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, i+CH));
+  return btoa(bin);
+}
+function utf8ToB64(str){ return bytesToB64(new TextEncoder().encode(str)); }
+// Base64URL / 패딩 없음 → 표준 Base64로 정규화 (구버전 무압축 입력용)
+function normalizeB64(s){
+  const std = s.replace(/-/g,"+").replace(/_/g,"/").replace(/=+$/,"");
+  const pad = std.length % 4;
+  return std + (pad===2 ? "==" : pad===3 ? "=" : "");
+}
 function tryParseJson(s){
   try{ const o = JSON.parse(s); return (o && typeof o === "object") ? o : null; }
   catch(e){ return null; }
 }
-// gzip 해제 (브라우저 내장 DecompressionStream)
-async function gunzipToText(bytes){
+// gzip 해제 (브라우저 내장 DecompressionStream) → 바이트
+async function gunzipToBytes(bytes){
   if(typeof DecompressionStream === "undefined")
     throw new Error("이 브라우저는 압축 해제를 지원하지 않습니다. 최신 크롬 또는 엣지에서 열어 주세요.");
   try{
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
     const buf = await new Response(stream).arrayBuffer();
-    return new TextDecoder("utf-8").decode(buf);
+    return new Uint8Array(buf);
   }catch(e){
     throw new Error("압축 해제에 실패했습니다. 문자열이 중간에 잘렸거나 일부만 복사됐을 수 있습니다.");
   }
@@ -243,13 +287,13 @@ async function decodeInput(rawInput){
   const backup = /\[BACKUP\]/i.test(s);
   // 1) 순수 JSON
   let o = tryParseJson(s);
-  if(o) return {data:o, how:"JSON 원문", backup};
+  if(o) return {data:o, how:"JSON 원문", backup, json:s, b64:utf8ToB64(s)};
   // 2) URL 인코딩 해제 (GZ1%3A... 형태로 복사된 경우 포함)
   if(/%[0-9A-Fa-f]{2}/.test(s)){
     try{
       const u = decodeURIComponent(s);
       o = tryParseJson(u);
-      if(o) return {data:o, how:"URL 인코딩 해제 → JSON", backup};
+      if(o) return {data:o, how:"URL 인코딩 해제 → JSON", backup, json:u, b64:utf8ToB64(u)};
       s = u;
     }catch(e){}
   }
@@ -257,17 +301,20 @@ async function decodeInput(rawInput){
   const m = s.match(new RegExp(GZ_MARK + "([A-Za-z0-9_\\-+/=\\s]+)"));
   if(m){
     const token = m[1].replace(/\s+/g,"");
-    const json = await gunzipToText(b64ToBytes(token));
+    const jsonBytes = await gunzipToBytes(b64ToBytes(token));
+    const json = new TextDecoder("utf-8").decode(jsonBytes);
     o = tryParseJson(json);
-    if(o) return {data:o, how:"압축 해제(gzip) → JSON", backup};
+    // 압축 해제한 바이트를 그대로 Base64 → 기기 세이브 파일 내용과 바이트 단위로 동일
+    if(o) return {data:o, how:"압축 해제(gzip) → JSON", backup, json, b64:bytesToB64(jsonBytes)};
     return null;
   }
   // 4) 구버전 무압축 Base64
   const b64 = s.replace(/\s+/g,"").replace(/^\[BACKUP\]/i,"");
   if(/^[A-Za-z0-9+/=_-]+$/.test(b64)){
     try{
-      o = tryParseJson(b64ToUtf8(b64));
-      if(o) return {data:o, how:"Base64 디코딩 → JSON", backup};
+      const json = b64ToUtf8(b64);
+      o = tryParseJson(json);
+      if(o) return {data:o, how:"Base64 디코딩 → JSON", backup, json, b64:normalizeB64(b64)};
     }catch(e){}
   }
   return null;
@@ -708,7 +755,44 @@ async function analyze(){
   }
   note.textContent = "해석 방식: " + decoded.how
     + (decoded.backup ? "  ·  ⚠ 백업 파일에서 읽힌 데이터" : "");
+  LAST_B64 = decoded.b64 || "";
+  LAST_JSON = decoded.json || "";
   render(decoded.data);
+  renderRaw(decoded);
+}
+/* 원본 Base64 / JSON 카드 채우기 (기준 시각 재렌더와 무관하게 analyze에서 1회) */
+function renderRaw(decoded){
+  document.getElementById("raw-b64").value = LAST_B64;
+  const bytes = LAST_B64 ? b64ToBytes(LAST_B64).length : 0;
+  document.getElementById("b64-note").textContent = LAST_B64
+    ? LAST_B64.length.toLocaleString("ko-KR") + "자 · JSON " + bytes.toLocaleString("ko-KR") + " bytes"
+      + (decoded.backup ? " · [BACKUP] 접두사 제거됨" : "")
+    : "";
+}
+function rawFileName(ext){
+  const d = TH_LAST_DATA || {};
+  const nick = (d.PlayFab_DisplayName || "save").replace(/[^\w가-힣-]+/g, "_");
+  const t = (d.LastSaveTime || "").replace(/[^\d]/g, "").slice(0, 12) || "nodate";
+  return "CatGunner_" + nick + "_" + t + "." + ext;
+}
+async function copyText(text, btn){
+  if(!text) return;
+  try{ await navigator.clipboard.writeText(text); }
+  catch(e){
+    // file:// 로 열었거나 클립보드 API 미지원 → 임시 textarea로 복사
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
+  }
+  if(btn){ const old = btn.textContent; btn.textContent = "복사됨 ✓"; setTimeout(()=>btn.textContent = old, 1500); }
+}
+function downloadText(text, name){
+  if(!text) return;
+  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
 }
 function render(d){
   TH_LAST_DATA = d;
@@ -881,6 +965,9 @@ function clearAll(){
   document.getElementById("summary-strip").style.display = "none";
   document.getElementById("error-box").style.display = "none";
   document.getElementById("decode-note").textContent = "";
+  document.getElementById("raw-b64").value = "";
+  document.getElementById("b64-note").textContent = "";
+  LAST_B64 = ""; LAST_JSON = "";
 }
 // 붙여넣기만 해도 자동 분석
 document.getElementById("input").addEventListener("paste", ()=> setTimeout(analyze, 50));
