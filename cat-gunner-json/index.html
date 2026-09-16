@@ -253,13 +253,26 @@ const ITEM_NAMES = {
   31:"다이아 dia_0 (첫 구매 2배)", 32:"다이아 dia_1 (첫 구매 2배)",
   33:"다이아 dia_2 (첫 구매 2배)", 34:"다이아 dia_3 (첫 구매 2배)",
   35:"다이아 dia_4 (첫 구매 2배)",
-  // VIP 플러스팩
   36:"VIP 시간 패키지", 37:"VIP 추가 보상 패키지", 38:"VIP 편의 패키지",
-  // 레이드
   39:"레이드 티켓", 40:"레이드 저금통 1", 41:"레이드 저금통 2", 42:"레이드 저금통 3",
   43:"레이드 주간 미션 티켓", 44:"레이드 도우미"
 };
 function itemName(idx){ return ITEM_NAMES[idx] || ("알 수 없는 상품 #"+idx); }
+
+/* 리딤코드 해시 → 원문 — RedeemCode_manager._codes 와 동일하게 유지할 것
+   (새 코드 추가 시 C#에서 Debug.Log(RedeemCode_manager.Hash("코드"))로 뽑은 해시를 여기에도 등록) */
+const REDEEM_CODES = {
+  "9969467bdf9e8e3816bd9ff54353651cfb1efe721b990cdb7145f1026e97ddc0":"catgun2609",
+  "4ab1e911c86aba8dff1b1ae5f4bb1b28df0343fdefba76a885c70a88834a8b45":"lumbercat777",
+  "e6b0a1cbef482e0e6cb69467bb08e7853bb7ff2267ba7c002d315d6df6f93ea4":"diacatbox"
+};
+function redeemUsedHtml(d){
+  if(!has(d,'Redeem_UsedCodes')) return absentHtml();
+  const hashes = String(d.Redeem_UsedCodes||"").split(";").map(x=>x.trim()).filter(Boolean);
+  if(!hashes.length) return noneHtml("사용 이력 없음");
+  const names = hashes.map(h=>REDEEM_CODES[h] || ("미등록 해시 "+h.slice(0,10)+"…"));
+  return esc(hashes.length+"개 사용")+sub(names.join(" · "));
+}
 
 /* ═══════════════════════════════════════════════════════════════
    공통 유틸
@@ -953,6 +966,7 @@ function cardShop(d){
     + row("주간 코어 특가", field(d,'LastWeeklyCorePurchase_Date', v=>fmtStamp(v,'LastWeeklyCorePurchase_Date')))
     + row("주간 6000코어 특가", field(d,'LastWeekly6000CorePurchase_Date', v=>fmtStamp(v,'LastWeekly6000CorePurchase_Date')))
     + row("다이아 첫구매 2배", field(d,'Dia_FirstBuy_Used', v=>Array.isArray(v)? esc(countTrue(v)+"종 사용") : noneHtml("-")))
+    + row("리딤코드 사용", redeemUsedHtml(d))
     + '</div>' + packTable + histHtml + txnHtml + '</div>';
 }
 
