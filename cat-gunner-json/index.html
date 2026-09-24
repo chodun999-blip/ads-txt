@@ -237,7 +237,7 @@ const FIELD_TZ = {
   LastCheck_Date:'local', Free_GachaDate:'local', TicketCharge_Date:'local',
   Mission_SeasonEnd_Date:'local', Mission_MissionStart_Date:'local',
   Adventure_LastTicketCharge_Date:'local', UpgradeRebirth_LastDate:'local',
-  StepUp_Start_Date:'local'
+  StepUp_Start_Date:'local', Raid_Entry_Charge_Date:'local'
 };
 
 /* 구매 상품 이력 매핑 — Shop_manager.ItemIdxFromProductId 와 동일하게 유지할 것 */
@@ -272,6 +272,23 @@ function redeemUsedHtml(d){
   if(!hashes.length) return noneHtml("사용 이력 없음");
   const names = hashes.map(h=>REDEEM_CODES[h] || ("미등록 해시 "+h.slice(0,10)+"…"));
   return esc(hashes.length+"개 사용")+sub(names.join(" · "));
+}
+
+/* ── 레이드 주차 계산 — DailyGun.WeekIndex_return 과 동일 규칙
+      (2024-01-01(월) 기준, 매주 월요일 0시 +1. 기기 로컬 기준이라 뷰어는 KST로 근사) ── */
+const RAID_WEEK_EPOCH_UTC = Date.UTC(2024,0,1);
+const RAID_WEAK_NAMES = ["관통","폭발","레이저","미사일","폭발관통"];
+function weekIndexNow(){
+  const k = new Date(Date.now()+KST_MS);
+  const days = Math.floor((Date.UTC(k.getUTCFullYear(),k.getUTCMonth(),k.getUTCDate()) - RAID_WEEK_EPOCH_UTC)/86400e3);
+  return Math.floor(days/7);
+}
+function seasonState(idx){
+  if(idx===undefined||idx===null||idx===-1) return noneHtml("기록 없음");
+  const now = weekIndexNow();
+  if(idx===now) return esc("#"+idx)+" "+okHtml("이번 주차");
+  if(idx<now)   return esc("#"+idx)+sub("만료 · 현재 #"+now);
+  return esc("#"+idx)+" "+badHtml("미래 주차")+sub("현재 #"+now+" · 시계 조작 흔적");
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -886,6 +903,7 @@ function cardCurrency(d){
     row("다이아", field(d,'Dia', v=>fmtNum(v)) + " " +
         field(d,'_getDia', v=>sub("획득 "+divDia(v))) + field(d,'_useDia', v=>sub("사용 "+divDia(v)))) +
     row("펫 코인", field(d,'PetCoin', fmtNum)) +
+    row("강화석", field(d,'StarGem', fmtNum)) +
     row("탐험 코어", field(d,'Adventure_Currency_Core', v=>Array.isArray(v)?esc(v.join(" / ")):noneHtml("-")))
   );
 }
@@ -990,6 +1008,62 @@ function cardTimedPacks(d){
   );
 }
 
+function cardRaid(d){
+  let rows = "";
+
+  rows += row("시즌(주차)", field(d,'Raid_Season_Index', v=>seasonState(v)));
+  rows += row("시즌 도전 / 최고", field(d,'Raid_Season_TryCount', v=>fmtNum(v)+"회")
+    + " / " + field(d,'Raid_Season_BestLevel', v=>"Lv."+fmtNum(v)));
+
+  let entry;
+  if(!has(d,'Raid_Free_Use_Count')) entry = absentHtml();
+  else{
+    const parts = ["무료 "+(+d.Raid_Free_Use_Count||0)+"/2"];
+    if(has(d,'Raid_AD_Enter_Used')) parts.push("광고 "+(d.Raid_AD_Enter_Used?"사용":"미사용"));
+    if(has(d,'Raid_IAP_Enter_Used')) parts.push("인앱 "+(d.Raid_IAP_Enter_Used?"사용":"미사용"));
+    entry = esc(parts.join(" · "));
+  }
+  rows += row("오늘 입장 사용", entry);
+  rows += row("입장 기준일", field(d,'Raid_Entry_Charge_Date', v=>fmtStamp(v,'Raid_Entry_Charge_Date',true)));
+
+  rows += row("타입별 역대 최고", field(d,'Raid_Best_Level_ByType', v=>{
+    if(!Array.isArray(v)||!v.length) return noneHtml("기록 없음");
+    return esc("최고 Lv."+Math.max.apply(null,v))+sub("배열 "+v.join(" / ")+" · index = GunType 열거형 순");
+  }));
+
+  rows += row("레이드 도우미", field(d,'Raid_Helper_Season_Index', v=>
+    v===-1 ? noneHtml("미구매") : seasonState(v)));
+
+  rows += row("강화석 저금통", (has(d,'Pig_Lv')||has(d,'Pig_Gem'))
+    ? esc((d.Pig_Lv||1)+"단계 · 적립 "+((+d.Pig_Gem||0).toLocaleString("ko-KR"))+"개")
+      + sub("시즌 내 구매 "+(+d.Pig_PurchaseCount||0)+"회"
+        + (has(d,'Pig_Season_Index') && d.Pig_Season_Index!==-1 ? " · 시즌 #"+d.Pig_Season_Index : ""))
+    : absentHtml());
+
+  rows += row("주간 레이드 미션", has(d,'RaidMission_Season_Index')
+    ? ( d.RaidMission_Season_Index===-1
+        ? noneHtml("기록 없음")
+        : "달성 "+esc(countTrue(d.RaidMission_Clear)+"/"+(Array.isArray(d.RaidMission_Clear)?d.RaidMission_Clear.length:0))
+          + sub("시즌 #"+d.RaidMission_Season_Index
+            + " · 보상 "+countTrue(d.RaidMission_Reward_Get)+"개 · 2회차 "+countTrue(d.RaidMission_Reward_ReGet)+"개"
+            + " · 미션 티켓 "+(d.RaidMission_Ticket?"구매":"미구매")) )
+    : absentHtml());
+
+  rows += row("스타 강화 슬롯", field(d,'Star_Slot_Lv', v=>Array.isArray(v)
+    ? esc("Lv "+v.join(" / "))
+      + (Array.isArray(d.Star_Slot_FailCount)? sub("실패 누적 "+d.Star_Slot_FailCount.join(" / ")) : "")
+    : noneHtml("-")));
+
+  const wk = weekIndexNow();
+  const note = '<div class="card-note">'
+    + '주차 번호는 2024-01-01(월) 기준으로 매주 월요일 0시에 1씩 증가합니다. 현재 주차 <b>#'+wk+'</b>'
+    + ' · 이번 주 약점 추정: '+esc(RAID_WEAK_NAMES[((wk%5)+5)%5])+'.'
+    + ' "이번 주차" 판정은 KST 기준 계산이라 해외 유저는 월요일 경계에서 ±1 차이가 날 수 있습니다.'
+    + '</div>';
+
+  return '<div class="card"><h2>레이드</h2><div class="kv">'+rows+'</div>'+note+'</div>';
+}
+
 function cardSeason(d){
   const missionCnt = Array.isArray(d.Mission_ExpGet) ? d.Mission_ExpGet.length : 0;
   return card("시즌패스 · 미션",
@@ -1083,6 +1157,7 @@ function render(d){
     safeCard(()=>cardEquip(d), "장비 · 업그레이드"),
     safeCard(()=>cardShop(d), "상점 · 구매 내역"),
     safeCard(()=>cardTimedPacks(d), "기간제 패키지"),
+    safeCard(()=>cardRaid(d), "레이드"),
     safeCard(()=>cardSeason(d), "시즌패스 · 미션"),
     safeCard(()=>cardRebirthFreecash(d), "강화환생 · 프리캐시"),
     safeCard(()=>cardMisc(d), "기타 콘텐츠")
