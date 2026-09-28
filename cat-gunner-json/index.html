@@ -233,7 +233,7 @@ const FIELD_TZ = {
   TimeHack_FlagDate:'utc', TimeHack_ServerDate:'utc', TimeStrike_LastServer:'utc',
   OfflineFailLastDate:'utc',
   LastDailyCorePurchase_Date:'utc', LastWeeklyCorePurchase_Date:'utc', LastWeekly6000CorePurchase_Date:'utc',
-  PlusPack_Purchase_Dates:'utc',
+  PlusPack_Purchase_Dates:'utc', PurchaseHistory_Dates:'utc',
   LastCheck_Date:'local', Free_GachaDate:'local', TicketCharge_Date:'local',
   Mission_SeasonEnd_Date:'local', Mission_MissionStart_Date:'local',
   Adventure_LastTicketCharge_Date:'local', UpgradeRebirth_LastDate:'local',
@@ -957,6 +957,7 @@ function cardShop(d){
   packTable += "</table>";
 
   const hist = Array.isArray(d.PurchaseHistory) ? d.PurchaseHistory : null;
+  const histDates = Array.isArray(d.PurchaseHistory_Dates) ? d.PurchaseHistory_Dates : [];
   let histHtml = '<details open><summary>구매 상품 이력 '+(hist? hist.length+"건" : "(이 버전에 없음)")+'</summary>';
   if(hist && hist.length){
     const cnt = {};
@@ -965,8 +966,14 @@ function cardShop(d){
     Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]).forEach(k=>{
       histHtml += '<tr><td>'+esc(itemName(+k))+'</td><td>'+cnt[k]+'회</td></tr>';
     });
+    // 날짜 리스트가 짧으면 앞쪽(옛 이력)이 시각 기록 이전 구매분
+    const off = hist.length - histDates.length;
     histHtml += '</table><div class="txn-list" style="margin-top:8px">'
-      + hist.map((i,n)=>(n+1)+". "+esc(itemName(i))).join("<br>") + '</div>';
+      + hist.map((i,n)=>{
+          const raw = (n-off>=0) ? histDates[n-off] : "";
+          const t = raw ? " — "+fmtStamp(raw,'PurchaseHistory_Dates') : sub("시각 기록 없음");
+          return (n+1)+". "+esc(itemName(i))+t;
+        }).join("<br>") + '</div>';
   }else if(hist){
     histHtml += '<div class="txn-list">'+noneHtml("기록 없음")+sub("이력 기능 추가 이전 구매는 포함되지 않습니다")+'</div>';
   }else{
@@ -989,14 +996,22 @@ function cardShop(d){
 }
 
 function cardTimedPacks(d){
-  const names = ["시간 연장","보상 증가","자동 합성"];
+  const names = ["시간 패키지","보상 패키지","편의 패키지"];
   let plus;
   if(!has(d,'PlusPack_Purchase_Dates')) plus = absentHtml();
   else if(!Array.isArray(d.PlusPack_Purchase_Dates)) plus = noneHtml("없음");
   else{
     plus = '<div>' + d.PlusPack_Purchase_Dates.map((s,i)=>{
       const n = names[i] || ("슬롯 "+i);
-      return esc(n)+": " + (s ? fmtStamp(s,'PlusPack_Purchase_Dates') : noneHtml("미구매"));
+      if(!s) return esc(n)+": " + noneHtml("미구매");
+      let state = "";
+      const t = absDate(s,'PlusPack_Purchase_Dates');
+      if(t){
+        const remainSec = (t.getTime() + 7*86400e3 - Date.now())/1000;   // 구매 +7일
+        state = remainSec > 0 ? " "+okHtml("활성")+sub(dur(remainSec)+" 남음")
+                              : " "+noneHtml("만료")+sub(dur(-remainSec)+" 경과");
+      }
+      return esc(n)+": " + fmtStamp(s,'PlusPack_Purchase_Dates') + state;
     }).join("<br>") + '</div>';
   }
   return card("기간제 패키지",
