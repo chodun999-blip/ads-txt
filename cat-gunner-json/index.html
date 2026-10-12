@@ -237,7 +237,11 @@ const FIELD_TZ = {
   LastCheck_Date:'local', Free_GachaDate:'local', TicketCharge_Date:'local',
   Mission_SeasonEnd_Date:'local', Mission_MissionStart_Date:'local',
   Adventure_LastTicketCharge_Date:'local', UpgradeRebirth_LastDate:'local',
-  StepUp_Start_Date:'local', Raid_Entry_Charge_Date:'local'
+  StepUp_Start_Date:'local', Raid_Entry_Charge_Date:'local',
+  PetStepUp_Start_Date:'local', AD_AutoUpgrade_LastDate:'local',
+  AD_Daily_Gun_LastDate:'local', AD_Daily_Pet_LastDate:'local',
+  Coupang_LastGet_Date:'local', Adventure_AD_Reduce_LastDate:'local',
+  InstallDate:'utc', SegmentPost_LastDate:'utc'
 };
 
 /* 구매 상품 이력 매핑 — Shop_manager.ItemIdxFromProductId 와 동일하게 유지할 것 */
@@ -464,6 +468,22 @@ function dur(sec, signed){
   return sign + dd + "일" + (hh? " "+hh+"시간" : "");
 }
 function refNow(){ return new Date(); }
+
+/* C# DateTime ticks(100ns 단위, 0001-01-01 기준) → 표시. UTC ticks 가정 */
+function ticksToDate(t){
+  const n = +t;
+  if(!n || !isFinite(n)) return null;
+  const ms = (n - 621355968000000000) / 10000;
+  if(ms <= 0) return null;
+  const d = new Date(ms);
+  return isNaN(d) ? null : d;
+}
+function fmtTicksShort(t){
+  const d = ticksToDate(t);
+  if(!d) return "-";
+  const k = new Date(d.getTime()+KST_MS);
+  return pad(k.getUTCMonth()+1)+"-"+pad(k.getUTCDate())+" "+pad(k.getUTCHours())+":"+pad(k.getUTCMinutes());
+}
 
 /* ═══════════════════════════════════════════════════════════════
    디코딩 — JSON / URL 인코딩 / GZ1 압축본 / 구버전 Base64 / [BACKUP]
@@ -878,7 +898,14 @@ function cardBasic(d){
     row("리뷰 작성", field(d,'is_reviewed', v=>fmtBool(v))) +
     row("튜토리얼", field(d,'TutorialCleared', v=>fmtBool(v,"완료","미완료"))) +
     row("출석 진행", field(d,'CheckNum', v=>fmtNum(v)+"회차") + " " +
-        field(d,'LastCheck_Date', v=>sub("마지막 "+String(v||"기록 없음")))) +
+        field(d,'LastCheck_Date', v=>sub("마지막 "+String(v||"기록 없음")))
+        + field(d,'TotalCheckNum', v=>sub("누적 "+v+"일"))) +
+    row("쿠팡 보상", field(d,'Coupang_LastGet_Date', v=>fmtStamp(v,'Coupang_LastGet_Date',true))) +
+    row("설치일", field(d,'InstallDate', v=> v
+        ? esc(v) + field(d,'InstallDate_Source', s=>sub("출처 "+(s||"-")))
+        : noneHtml("기록 없음"))) +
+    row("리워드 광고 시청", field(d,'RewardAdWatchCount', v=>fmtNum(v)+"회")
+        + field(d,'SegmentPost_LastDate', v=>sub("세그먼트 전송 "+(v||"없음")))) +
     row("온라인검사 실패 누적", field(d,'OfflineFailStreak', v=>fmtNum(v)+"일") + " " +
         field(d,'OfflineFailLastDate', v=>sub("마지막 카운트 "+(v||"없음")+" · UTC 날짜")))
   );
@@ -889,6 +916,7 @@ function cardAccount(d){
   return card("계정 (PlayFab)",
     row("닉네임", field(d,'PlayFab_DisplayName', v=>esc(v||"-"))) +
     row("이메일", field(d,'PlayFab_Email', v=>esc(v||"-"))) +
+    row("PlayFab ID", field(d,'PlayFab_Id', v=>esc(v||"-"))) +
     row("비밀번호", pw
       ? '<span id="pw-mask">••••••••</span><span id="pw-real" style="display:none">'+pw+'</span><button class="pw-btn" onclick="togglePw(this)">보기</button>'
       : noneHtml("없음"))
@@ -928,14 +956,60 @@ function cardEquip(d){
     row("환생 업그레이드", field(d,'Rebirth_Upgrade_Lv', v=>Array.isArray(v)?esc(v.join(" / ")):noneHtml("-"))) +
     row("장착 총", field(d,'Selected_items', v=>Array.isArray(v)?esc(v.join(", ")):noneHtml("-"))) +
     row("보유 총 슬롯", field(d,'Owned_Gun_list', v=>Array.isArray(v)?esc(v.filter(x=>x>=0).length+"칸 사용 / "+v.length+"칸"):noneHtml("-"))) +
+    row("총 잠금", (has(d,'Owned_Gun_Pause')||has(d,'Selected_Pause'))
+        ? esc("인벤 "+countTrue(d.Owned_Gun_Pause)+"개 · 장착 "+countTrue(d.Selected_Pause)+"개")
+        : absentHtml()) +
+    row("총 금고", has(d,'Safe_Gun_list')
+        ? (Array.isArray(d.Safe_Gun_list)
+            ? esc(d.Safe_Gun_list.filter(x=>x>=0).length+"칸 사용 / "+d.Safe_Gun_list.length+"칸")
+              + sub("다이아 해금 "+(+d.Safe_Purchased_Count||0)+"칸")
+            : noneHtml("빈 금고"))
+        : absentHtml()) +
     row("합성 경험", field(d,'Has_Merged', v=>fmtBool(v,"있음","없음"))) +
     row("광고 보상 무기", field(d,'AD_Gun_Num', v=> v>=0
-        ? esc("#"+v)+ (has(d,'AD_Gun_EndUtcTicks')? sub("만료 ticks "+d.AD_Gun_EndUtcTicks):"")
+        ? esc("#"+v)+ (has(d,'AD_Gun_EndUtcTicks')
+            ? sub("만료 "+(ticksToDate(d.AD_Gun_EndUtcTicks)? kst(ticksToDate(d.AD_Gun_EndUtcTicks)) : "ticks "+d.AD_Gun_EndUtcTicks))
+            :"")
         : noneHtml("없음"))) +
+    row("일일 광고 뽑기(총)", field(d,'AD_Daily_Gun_LastDate', v=>v? esc(v)+sub("기기 로컬") : noneHtml())) +
+    row("광고 자동강화", (has(d,'AD_AutoUpgrade_RemainSec')||has(d,'AD_AutoUpgrade_LastDate'))
+        ? esc("잔여 "+Math.round(+d.AD_AutoUpgrade_RemainSec||0)+"초")
+          + field(d,'AD_AutoUpgrade_LastDate', v=>sub("마지막 시청 "+(v||"없음")+" · 기기 로컬"))
+        : absentHtml()) +
     row("스킨", field(d,'Skin_Selected_num', v=>"선택 #"+fmtNum(v)) + " " + field(d,'Skin_Unlock', v=>sub("해금 "+countTrue(v)+"종")) ) +
     row("유물", field(d,'Relics', v=>Array.isArray(v)? esc(v.filter(r=>r&&r.is_Unlock).length+"종 해금") : noneHtml("-"))) +
     row("버프 잔여", (has(d,'MoneyBuffTime')? esc("골드 "+Math.round(d.MoneyBuffTime)+"s") : absentHtml())
-        + (has(d,'PowerBuffTime')? esc(" / 공격 "+Math.round(d.PowerBuffTime)+"s") : ""))
+        + (has(d,'PowerBuffTime')? esc(" / 공격 "+Math.round(d.PowerBuffTime)+"s") : "")
+        + (has(d,'AtkSpeedBuffTime')? esc(" / 공속 "+Math.round(d.AtkSpeedBuffTime)+"s") : ""))
+  );
+}
+
+function cardPet(d){
+  return card("펫",
+    row("장착 펫", field(d,'Pet_Selected_items', v=>Array.isArray(v)?esc(v.join(", ")):noneHtml("-"))) +
+    row("보유 펫 슬롯", field(d,'Owned_Pet_list', v=>Array.isArray(v)?esc(v.filter(x=>x>=0).length+"칸 사용 / "+v.length+"칸"):noneHtml("-"))) +
+    row("합성(등급) 시드", field(d,'Pet_Type_Seed', v=> v===0
+        ? noneHtml("미발급")+sub("구버전 세이브 — 다음 실행 시 발급")
+        : esc(String(v)))) +
+    row("등급별 획득", field(d,'Pet_Type_Get_Count', v=>Array.isArray(v)
+        ? esc(v.join(" / "))+sub("Z / ZZ / ZZZ 순")
+        : noneHtml("-"))) +
+    row("펫 잠금", (has(d,'Owned_Pet_Pause')||has(d,'Pet_Selected_Pause'))
+        ? esc("인벤 "+countTrue(d.Owned_Pet_Pause)+"개 · 장착 "+countTrue(d.Pet_Selected_Pause)+"개")
+        : absentHtml()) +
+    row("펫 금고", has(d,'Safe_Pet_list')
+        ? (Array.isArray(d.Safe_Pet_list)
+            ? esc(d.Safe_Pet_list.filter(x=>x>=0).length+"칸 사용 / "+d.Safe_Pet_list.length+"칸")
+              + sub("다이아 해금 "+(+d.Pet_Safe_Purchased_Count||0)+"칸")
+            : noneHtml("빈 금고"))
+        : absentHtml()) +
+    row("펫 스킬", (has(d,'PetSkill_Auto')||has(d,'PetSkill_UseTicks'))
+        ? ( (has(d,'PetSkill_Auto') ? (d.PetSkill_Auto? okHtml("자동 사용") : esc("수동 사용")) : "")
+            + (Array.isArray(d.PetSkill_UseTicks)
+               ? sub("슬롯별 마지막 사용 "+d.PetSkill_UseTicks.map(t=>fmtTicksShort(t)).join(" · ")+" (KST)")
+               : "") )
+        : absentHtml()) +
+    row("일일 광고 뽑기(펫)", field(d,'AD_Daily_Pet_LastDate', v=>v? esc(v)+sub("기기 로컬") : noneHtml()))
   );
 }
 
@@ -948,7 +1022,9 @@ function cardShop(d){
     ["자동업그레이드 팩", d.Is_AutoUpgrade_Pack, 'Is_AutoUpgrade_Pack'],
     ["버프 팩", d.Is_Buff_Pack, 'Is_Buff_Pack'],
     ["다이아 팩", d.Is_Dia_Pack, 'Is_Dia_Pack'],
-    ["광산 팩", d.Is_Mine_Pack, 'Is_Mine_Pack']
+    ["광산 팩", d.Is_Mine_Pack, 'Is_Mine_Pack'],
+    ["자동다이아 성장 패키지", d.Is_AutoDia_Growth, 'Is_AutoDia_Growth'],
+    ["자동다이아 추가 패키지", d.Is_AutoDia_Extra, 'Is_AutoDia_Extra']
   ];
   let packTable = '<table class="pack">';
   packs.forEach(p=>{
@@ -1019,7 +1095,11 @@ function cardTimedPacks(d){
     row("스텝업 구매", field(d,'StepUp_Purchased', v=>Array.isArray(v)? esc(countTrue(v)+" / "+v.length+"단계") : noneHtml("-"))) +
     row("스텝업 시작일", field(d,'StepUp_Start_Date', v=>fmtStamp(v,'StepUp_Start_Date'))) +
     row("주간 총 상점", field(d,'DailyGun_Purchase_Counts', v=>Array.isArray(v)? esc(v.join(" / ")+"회") : noneHtml("-"))) +
-    row("주간 키", field(d,'DailyGun_Week_Key', v=>esc(v||"-")))
+    row("주간 키(총)", field(d,'DailyGun_Week_Key', v=>esc(v||"-"))) +
+    row("펫 스텝업 구매", field(d,'PetStepUp_Purchased', v=>Array.isArray(v)? esc(countTrue(v)+" / "+v.length+"단계") : noneHtml("-"))) +
+    row("펫 스텝업 시작일", field(d,'PetStepUp_Start_Date', v=>fmtStamp(v,'PetStepUp_Start_Date'))) +
+    row("주간 펫 상점", field(d,'DailyPet_Purchase_Counts', v=>Array.isArray(v)? esc(v.join(" / ")+"회") : noneHtml("-"))) +
+    row("주간 키(펫)", field(d,'DailyPet_Week_Key', v=>esc(v||"-")))
   );
 }
 
@@ -1067,6 +1147,9 @@ function cardRaid(d){
   rows += row("스타 강화 슬롯", field(d,'Star_Slot_Lv', v=>Array.isArray(v)
     ? esc("Lv "+v.join(" / "))
       + (Array.isArray(d.Star_Slot_FailCount)? sub("실패 누적 "+d.Star_Slot_FailCount.join(" / ")) : "")
+    : noneHtml("-")));
+  rows += row("슬롯강화 시드", field(d,'Star_Slot_Seed', v=>Array.isArray(v)
+    ? esc(v.join(" / "))+sub("슬롯별 판정 시드")
     : noneHtml("-")));
 
   const wk = weekIndexNow();
@@ -1120,6 +1203,10 @@ function cardMisc(d){
     row("광산 티켓 사용", field(d,'TicketUse_Count', v=>fmtNum(v)+"회") + " " +
         field(d,'TicketCharge_Date', v=>sub("충전 기준일 "+String(v||"없음")))) +
     row("광산 최고 보상", field(d,'Best_Reward', fmtNum)) +
+    row("탐험 광고 단축", (has(d,'Adventure_AD_Reduce_UseCount')||has(d,'Adventure_AD_Reduce_LastDate'))
+        ? esc("오늘 "+(+d.Adventure_AD_Reduce_UseCount||0)+"회")
+          + field(d,'Adventure_AD_Reduce_LastDate', v=>sub("마지막 "+(v||"없음")+" · 기기 로컬"))
+        : absentHtml()) +
     row("다이아 저금통", field(d,'diaPig', v=> v ? esc((v.Dia_Now||0)+"개")+sub("마지막 틱 "+(v.LastTickTime||"-")) : noneHtml("없음"))) +
     row("설정", (has(d,'BGM_Mute')? esc("BGM "+(d.BGM_Mute?"음소거":"켜짐")) : absentHtml())
         + (has(d,'SFX_Mute')? esc(" / 효과음 "+(d.SFX_Mute?"음소거":"켜짐")) : ""))
@@ -1170,6 +1257,7 @@ function render(d){
     safeCard(()=>cardCurrency(d), "보유 재화"),
     safeCard(()=>cardProgress(d), "진행도"),
     safeCard(()=>cardEquip(d), "장비 · 업그레이드"),
+    safeCard(()=>cardPet(d), "펫"),
     safeCard(()=>cardShop(d), "상점 · 구매 내역"),
     safeCard(()=>cardTimedPacks(d), "기간제 패키지"),
     safeCard(()=>cardRaid(d), "레이드"),
