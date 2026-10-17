@@ -131,7 +131,7 @@
   </header>
 
   <div class="input-card">
-    <textarea id="input" placeholder="세이브 데이터를 그대로 붙여넣으세요. (JSON · Base64 · GZ1 · 메일 본문 통째로도 가능)"></textarea>
+    <textarea id="input" placeholder="세이브 데이터를 그대로 붙여넣으세요. (JSON · Base64 · GZ1 · MAIL1 · ENC1 · 메일 본문 통째로도 가능)"></textarea>
     <div class="input-row">
       <button class="primary" onclick="analyze()">분석하기</button>
       <label class="filebtn">세이브 파일 열기<input type="file" id="file" accept=".txt,.json,.dat,.sav,*/*"></label>
@@ -142,8 +142,9 @@
   </div>
 
   <div class="legend">
-    <span>UTC로 저장되는 항목(마지막 저장 · 판정 시각 · 장부 · 상점 특가)은 <b>KST 환산</b>, 기기 로컬로 저장되는 항목(출석 · 무료뽑기 · 티켓 · 시즌)은 <b>원본 그대로</b> 표시합니다.</span>
+    <span>UTC로 저장되는 항목(마지막 저장 · 클라우드 저장 · 판정 시각 · 장부 · 상점 특가)은 <b>KST 환산</b>, 기기 로컬로 저장되는 항목(출석 · 무료뽑기 · 티켓 · 시즌)은 <b>원본 그대로</b> 표시합니다.</span>
     <span>"미래" 판정은 <b>지금 시각</b> 대비입니다. 세이브를 받은 지 오래됐다면 미래 폭이 줄어든 상태로 보입니다.</span>
+    <span>읽을 수 있는 형식: <b>MAIL1</b>(암호화 메일, 신버전) · <b>GZ1</b>(압축 메일, 구버전) · <b>평문 Base64</b>(더 구버전 메일 / 1.1.61 이하 세이브 파일) · <b>ENC1</b>(1.1.62+ 세이브 파일) · <b>JSON 원문</b>. 구버전 유저 데이터도 그대로 판독됩니다.</span>
   </div>
 
   <div id="summary-strip"></div>
@@ -181,7 +182,8 @@
         <b>평문 Base64</b>는 1.1.61 이하 구버전 빌드의 세이브 파일 형식이고,
         <b>ENC1 암호화본</b>은 1.1.62+ 빌드의 세이브 파일 형식(AES-256 + HMAC, 분석할 때마다 IV가 달라져 내용이 매번 다르게 보이는 게 정상)입니다.
         테스트할 빌드 버전에 맞는 쪽을 세이브 파일에 넣으세요 — 1.1.62+ 빌드는 BundleCode가 1.1.62 이상인 평문 세이브를 거부합니다.
-        GZ1 압축본은 압축 해제한 바이트를 그대로 인코딩하므로 원본과 바이트 단위로 동일하며, <b>[BACKUP]</b> 접두사는 제외되어 있습니다.
+        1.1.62+ 유저에게 복원용으로 건넬 때는 <b>ENC1 쪽만</b> 주세요 (평문을 주면 메일 암호화의 의미가 없어집니다).
+        GZ1 압축본·MAIL1 메일본은 압축 해제한 바이트를 그대로 인코딩하므로 원본과 바이트 단위로 동일하며, <b>[BACKUP]</b> 접두사는 제외되어 있습니다.
       </div>
     </div>
 
@@ -219,14 +221,16 @@ const TH_STRIKE_DECAY_DAYS   = 60;        // Gamemanager.StrikeDecayDays
 const TH_OFFLINE_FLAG        = 5;         // Gamemanager.OfflineFlagThreshold
 const KST_MS                 = 9 * 3600e3;
 
-const GZ_MARK = "GZ1:";
+const GZ_MARK   = "GZ1:";    // 구버전 압축 메일
+const MAIL_MARK = "MAIL1:";  // 신버전 암호화 메일 (gzip → AES → Base64URL)
 
 /* ═══════════════════════════════════════════════════════════════
-   SaveCrypto 재현 (ENC1) — C# SaveCrypto.cs 와 반드시 동기화할 것
-   포맷: "ENC1:" + Base64( IV(16) + AES-256-CBC 암호문 + HMAC-SHA256(32) )
+   SaveCrypto 재현 — C# SaveCrypto.cs 와 반드시 동기화할 것
+   세이브 파일: "ENC1:"  + Base64   ( IV(16) + AES-256-CBC 암호문 + HMAC-SHA256(32) )
+   문의 메일:   "MAIL1:" + Base64URL( IV(16) + AES-256-CBC 암호문 + HMAC-SHA256(32) )
    키: seed = K1 XOR K2,
-       aesKey = SHA256(seed + "CatGunner.save.aes")
-       macKey = SHA256(seed + "CatGunner.save.mac")
+       세이브  aes = SHA256(seed + "CatGunner.save.aes"),  mac = SHA256(seed + "CatGunner.save.mac")
+       메일    aes = SHA256(seed + "CatGunner.mail.aes"),  mac = SHA256(seed + "CatGunner.mail.mac")
    ★ C# 쪽 K1/K2를 배포 전 교체하면 아래 두 배열도 똑같이 바꿔야 함.
    ★ 이 파일에 키가 들어가므로 뷰어는 절대 외부에 공유 금지.
    ═══════════════════════════════════════════════════════════════ */
@@ -239,7 +243,7 @@ const ENC_K2 = [
   0x0D,0x19,0xA4,0x63,0xF8,0x9D,0xB6,0xF4,0x04,0xED,0x4E,0x2B,0x29,0x51,0xA4,0xD3,
   0x52,0x91,0x37,0x29,0xCD,0x72,0x69,0x5D,0x48,0x74,0x9C,0x75,0x30,0x3A,0xA3,0xA7
 ];
-let _encKeys = null;   // {aes: CryptoKey, mac: CryptoKey}
+let _encKeys = null;   // {save:{aes,mac}, mail:{aes,mac}}
 
 function cryptoAvailable(){
   return typeof crypto !== "undefined" && crypto.subtle && typeof crypto.subtle.digest === "function";
@@ -252,47 +256,60 @@ async function encEnsureKeys(){
   for(let i=0;i<32;i++) seed[i] = ENC_K1[i] ^ ENC_K2[i];
   const te = new TextEncoder();
   const concat = (a,b)=>{ const r=new Uint8Array(a.length+b.length); r.set(a,0); r.set(b,a.length); return r; };
-  const aesRaw = await crypto.subtle.digest("SHA-256", concat(seed, te.encode("CatGunner.save.aes")));
-  const macRaw = await crypto.subtle.digest("SHA-256", concat(seed, te.encode("CatGunner.save.mac")));
+  const derive = label => crypto.subtle.digest("SHA-256", concat(seed, te.encode(label)));
+  const pair = async (aesLabel, macLabel)=>({
+    aes: await crypto.subtle.importKey("raw", await derive(aesLabel), {name:"AES-CBC"}, false, ["encrypt","decrypt"]),
+    mac: await crypto.subtle.importKey("raw", await derive(macLabel), {name:"HMAC", hash:"SHA-256"}, false, ["sign","verify"])
+  });
   _encKeys = {
-    aes: await crypto.subtle.importKey("raw", aesRaw, {name:"AES-CBC"}, false, ["encrypt","decrypt"]),
-    mac: await crypto.subtle.importKey("raw", macRaw, {name:"HMAC", hash:"SHA-256"}, false, ["sign","verify"])
+    save: await pair("CatGunner.save.aes", "CatGunner.save.mac"),   // 세이브 파일 (ENC1)
+    mail: await pair("CatGunner.mail.aes", "CatGunner.mail.mac")    // 문의 메일 (MAIL1)
   };
   return _encKeys;
 }
-/* 평문(Base64 JSON 문자열) → "ENC1:..." (C# Encrypt와 동일: 문자열의 UTF-8 바이트를 암호화) */
-async function encEncrypt(plainText){
-  const k = await encEnsureKeys();
+/* 바이트 → IV+암호문+MAC (C# SaveCrypto.Seal) */
+async function sealBytes(data, k){
   const iv = crypto.getRandomValues(new Uint8Array(16));
-  const data = new TextEncoder().encode(plainText || "");
   const cipher = new Uint8Array(await crypto.subtle.encrypt({name:"AES-CBC", iv}, k.aes, data)); // PKCS7
-  const body = new Uint8Array(iv.length + cipher.length);
-  body.set(iv,0); body.set(cipher, iv.length);
+  const body = new Uint8Array(16 + cipher.length);
+  body.set(iv,0); body.set(cipher,16);
   const mac = new Uint8Array(await crypto.subtle.sign("HMAC", k.mac, body));
-  const blob = new Uint8Array(body.length + mac.length);
+  const blob = new Uint8Array(body.length + 32);
   blob.set(body,0); blob.set(mac, body.length);
-  return ENC_MARK + bytesToB64(blob);
+  return blob;
 }
-/* "ENC1:..." → {result:'ok'|'tampered'|'corrupt', plain} (C# TryDecrypt와 동일 정책) */
+/* IV+암호문+MAC → {result:'ok'|'tampered'|'corrupt', data:Uint8Array|null} (C# SaveCrypto.Open) */
+async function openBytes(blob, k){
+  if(!blob || blob.length < 16+16+32) return {result:"corrupt", data:null};
+  const bodyLen = blob.length - 32;
+  const body = blob.subarray(0, bodyLen), mac = blob.subarray(bodyLen);
+  const macOk = await crypto.subtle.verify("HMAC", k.mac, mac, body);
+  try{
+    const data = new Uint8Array(await crypto.subtle.decrypt(
+      {name:"AES-CBC", iv: blob.subarray(0,16)}, k.aes, blob.subarray(16, bodyLen)));
+    return {result: macOk ? "ok" : "tampered", data};
+  }catch(e){
+    return {result:"corrupt", data:null};
+  }
+}
+/* 세이브 파일용 (ENC1): 평문(Base64 JSON 문자열) ↔ "ENC1:..." — C# Encrypt/TryDecrypt 와 동일 */
+async function encEncrypt(plainText){
+  const k = (await encEnsureKeys()).save;
+  return ENC_MARK + bytesToB64(await sealBytes(new TextEncoder().encode(plainText || ""), k));
+}
 async function encDecrypt(stored){
   let blob;
   try{ blob = b64ToBytes(stored.substring(ENC_MARK.length).replace(/\s+/g,"")); }
   catch(e){ return {result:"corrupt", plain:null}; }
-  if(blob.length < 16+16+32) return {result:"corrupt", plain:null};
-  const k = await encEnsureKeys();
-  const bodyLen = blob.length - 32;
-  const body = blob.subarray(0, bodyLen);
-  const mac  = blob.subarray(bodyLen);
-  const macOk = await crypto.subtle.verify("HMAC", k.mac, mac, body);
-  try{
-    const iv = blob.subarray(0,16);
-    const cipher = blob.subarray(16, bodyLen);
-    const data = await crypto.subtle.decrypt({name:"AES-CBC", iv}, k.aes, cipher);
-    const plain = new TextDecoder("utf-8").decode(data);
-    return {result: macOk ? "ok" : "tampered", plain};
-  }catch(e){
-    return {result:"corrupt", plain:null};
-  }
+  const r = await openBytes(blob, (await encEnsureKeys()).save);
+  return {result:r.result, plain: r.data ? new TextDecoder("utf-8").decode(r.data) : null};
+}
+/* 문의 메일용 (MAIL1): "MAIL1:..." → gzip 바이트 — C# TryDecryptMail 과 동일 */
+async function mailDecrypt(stored){
+  let blob;
+  try{ blob = b64ToBytes(stored.substring(MAIL_MARK.length).replace(/\s+/g,"")); }
+  catch(e){ return {result:"corrupt", data:null}; }
+  return openBytes(blob, (await encEnsureKeys()).mail);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -302,6 +319,7 @@ let LAST_DATA = null;   // 파싱된 세이브 객체
 let LAST_JSON = "";     // 원본 JSON 텍스트 (재직렬화 아님)
 let LAST_B64  = "";     // 세이브 파일 형식 Base64(JSON) — 구버전/평문
 let LAST_ENC  = "";     // 세이브 파일 형식 "ENC1:..." — 1.1.62+ 암호화
+let LAST_TAMPERED = false; // HMAC 불일치 (ENC1 / MAIL1)
 let AMNESTY_B64 = "";
 let AMNESTY_ENC = "";
 let ERA = null;         // 스키마 세대 판정 결과
@@ -314,7 +332,7 @@ const TZ_MODE = "auto";   // 스키마 세대로 UTC/로컬 저장을 자동 판
    구버전(시간검증 이전) 세이브는 'utc' 항목도 전부 로컬로 취급한다.
    ═══════════════════════════════════════════════════════════════ */
 const FIELD_TZ = {
-  LastSaveTime:'utc', LastTrustedUtc:'utc',
+  LastSaveTime:'utc', CloudSaveTime:'utc', LastTrustedUtc:'utc',
   TimeHack_FlagDate:'utc', TimeHack_ServerDate:'utc', TimeStrike_LastServer:'utc',
   OfflineFailLastDate:'utc',
   LastDailyCorePurchase_Date:'utc', LastWeeklyCorePurchase_Date:'utc', LastWeekly6000CorePurchase_Date:'utc',
@@ -598,7 +616,9 @@ function fmtTicksShort(t){
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   디코딩 — JSON / URL 인코딩 / GZ1 압축본 / 구버전 Base64 / [BACKUP]
+   디코딩 — JSON / URL 인코딩 / MAIL1 암호화 메일 / ENC1 암호화 파일 /
+            GZ1 압축본 / 구버전 Base64 / [BACKUP]
+   (구버전 형식은 전부 그대로 유지 — 이전 유저 데이터 호환)
    ═══════════════════════════════════════════════════════════════ */
 function b64ToBytes(s){
   const std = s.replace(/-/g,"+").replace(/_/g,"/");
@@ -638,9 +658,11 @@ async function decodeInput(rawInput){
   let s = rawInput.trim();
   const backup = /\[BACKUP\]/i.test(s);
 
+  // 1) JSON 원문
   let o = tryParseJson(s);
   if(o) return {data:o, how:"JSON 원문", backup, json:s, b64:utf8ToB64(s)};
 
+  // 2) URL 인코딩된 본문 (mailto 그대로 복사된 경우)
   if(/%[0-9A-Fa-f]{2}/.test(s)){
     try{
       const u = decodeURIComponent(s);
@@ -650,7 +672,22 @@ async function decodeInput(rawInput){
     }catch(e){}
   }
 
-  // 암호화 세이브(1.1.62+ 파일 내용 그대로) — 본문에 섞여 있어도 토큰만 추출
+  // 3) 신버전 문의 메일 (MAIL1) — 본문에 섞여 있어도 토큰만 추출 → 복호화 → gzip 해제 → JSON
+  const mm = s.match(new RegExp(MAIL_MARK + "([A-Za-z0-9_\\-+/=\\s]+)"));
+  if(mm){
+    const dec = await mailDecrypt(MAIL_MARK + mm[1]);
+    if(dec.result === "corrupt")
+      throw new Error("메일 세이브를 복호화하지 못했습니다. 문자열이 잘렸거나 편집됐거나, 게임 빌드의 암호화 키(K1/K2)가 뷰어와 다릅니다.");
+    const jsonBytes = await gunzipToBytes(dec.data);
+    const json = new TextDecoder("utf-8").decode(jsonBytes);
+    o = tryParseJson(json);
+    if(o) return {data:o, how:"메일 복호화(MAIL1) → 압축 해제 → JSON", backup,
+                  json, b64:bytesToB64(jsonBytes),
+                  tampered: dec.result === "tampered"};
+    throw new Error("복호화는 됐지만 내용이 세이브(JSON) 형식이 아닙니다.");
+  }
+
+  // 4) 암호화 세이브 파일 (ENC1, 1.1.62+ 파일 내용 그대로)
   const me = s.match(new RegExp(ENC_MARK + "([A-Za-z0-9+/=\\s]+)"));
   if(me){
     const dec = await encDecrypt(ENC_MARK + me[1]);
@@ -668,6 +705,7 @@ async function decodeInput(rawInput){
     throw new Error("복호화는 됐지만 내용이 세이브(Base64 JSON) 형식이 아닙니다.");
   }
 
+  // 5) 구버전 압축 메일 (GZ1)
   const m = s.match(new RegExp(GZ_MARK + "([A-Za-z0-9_\\-+/=\\s]+)"));
   if(m){
     const token = m[1].replace(/\s+/g,"");
@@ -678,6 +716,7 @@ async function decodeInput(rawInput){
     return null;
   }
 
+  // 6) 더 구버전 — 무압축 평문 Base64 (메일 / 1.1.61 이하 세이브 파일)
   const b64 = s.replace(/\s+/g,"").replace(/^\[BACKUP\]/i,"");
   if(/^[A-Za-z0-9+/=_-]+$/.test(b64)){
     try{
@@ -1029,6 +1068,9 @@ function cardBasic(d){
   return card("기본 정보",
     row("게임 버전", (ERA.version ? esc(ERA.version) : noneHtml("-")) + sub(ERA.label)) +
     row("마지막 저장", field(d,'LastSaveTime', v=>fmtStamp(v,'LastSaveTime'))) +
+    row("마지막 클라우드 저장", field(d,'CloudSaveTime', v=> v
+        ? fmtStamp(v,'CloudSaveTime')
+        : noneHtml("클라우드 저장 이력 없음"))) +
     row("총 플레이 시간", field(d,'TotalPlayTime', fmtPlayTime)) +
     row("리뷰 작성", field(d,'is_reviewed', v=>fmtBool(v))) +
     row("튜토리얼", field(d,'TutorialCleared', v=>fmtBool(v,"완료","미완료"))) +
@@ -1356,6 +1398,7 @@ function render(d){
   /* 요약 배지 */
   const strip = document.getElementById("summary-strip");
   let badges = "";
+  if(LAST_TAMPERED) badges += badge("⚠ 변조 감지 — HMAC 불일치 (외부에서 편집된 데이터)", "on-danger");
   try{
     const a = analyzeTime(d);
     if(a.flagged)                    badges += badge("⚠ 랭킹 차단 · "+(reasonLabel(a.reason)||a.reason||"사유 기록 없음"), "on-danger");
@@ -1427,13 +1470,14 @@ async function analyze(){
   }
   if(!decoded){
     note.textContent = "";
-    showError("데이터를 해석할 수 없습니다. JSON 전체 · Base64 · GZ1: 압축본 · ENC1: 암호화 세이브 중 하나가 온전히 복사됐는지 확인해 주세요. (앞뒤 일부만 복사되면 실패합니다)");
+    showError("데이터를 해석할 수 없습니다. JSON 전체 · Base64 · GZ1: 압축본 · MAIL1: 암호화 메일 · ENC1: 암호화 세이브 중 하나가 온전히 복사됐는지 확인해 주세요. (앞뒤 일부만 복사되면 실패합니다)");
     return;
   }
 
+  LAST_TAMPERED = !!decoded.tampered;
   note.textContent = "해석 방식: " + decoded.how
     + (decoded.backup ? "  ·  ⚠ 백업 파일에서 읽힌 데이터" : "")
-    + (decoded.tampered ? "  ·  ⚠ 변조 감지 (HMAC 불일치 — 외부에서 편집된 파일)" : "");
+    + (LAST_TAMPERED ? "  ·  ⚠ 변조 감지 (HMAC 불일치 — 외부에서 편집된 데이터)" : "");
   LAST_B64 = decoded.b64 || "";
   LAST_JSON = decoded.json || "";
   AMNESTY_B64 = ""; AMNESTY_ENC = "";
@@ -1457,7 +1501,7 @@ function renderRaw(decoded){
       + (decoded.backup ? " · [BACKUP] 접두사 제거됨" : "")
     : "";
 }
-/* 평문 Base64 → ENC1 암호화본 생성 (1.1.62+ 테스트용) */
+/* 평문 Base64 → ENC1 암호화본 생성 (1.1.62+ 테스트·복원용) */
 async function renderEnc(){
   LAST_ENC = "";
   const ta = document.getElementById("raw-enc");
@@ -1521,7 +1565,7 @@ function clearAll(){
   document.getElementById("enc-note").textContent = "";
   document.getElementById("amnesty-b64").value = "";
   document.getElementById("amnesty-diff").innerHTML = "";
-  LAST_B64=""; LAST_ENC=""; LAST_JSON=""; LAST_DATA=null; AMNESTY_B64=""; AMNESTY_ENC=""; ERA=null;
+  LAST_B64=""; LAST_ENC=""; LAST_JSON=""; LAST_DATA=null; LAST_TAMPERED=false; AMNESTY_B64=""; AMNESTY_ENC=""; ERA=null;
 }
 
 document.getElementById("input").addEventListener("paste", ()=> setTimeout(analyze, 50));
