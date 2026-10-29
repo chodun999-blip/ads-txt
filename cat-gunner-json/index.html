@@ -131,9 +131,11 @@
   </header>
 
   <div class="input-card">
-    <textarea id="input" placeholder="세이브 데이터를 그대로 붙여넣으세요. (JSON · Base64 · GZ1 · MAIL1 · ENC1 · 메일 본문 통째로도 가능)"></textarea>
+    <textarea id="input" placeholder="세이브 데이터를 그대로 붙여넣으세요. (JSON · Base64 · GZ1 · 메일 본문 통째로도 가능)"
+      autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
     <div class="input-row">
       <button class="primary" onclick="analyze()">분석하기</button>
+      <button class="ghost" onclick="pasteFromClipboard()">클립보드에서 붙여넣기</button>
       <label class="filebtn">세이브 파일 열기<input type="file" id="file" accept=".txt,.json,.dat,.sav,*/*"></label>
       <button class="ghost" onclick="clearAll()">초기화</button>
       <span id="decode-note"></span>
@@ -142,9 +144,8 @@
   </div>
 
   <div class="legend">
-    <span>UTC로 저장되는 항목(마지막 저장 · 클라우드 저장 · 판정 시각 · 장부 · 상점 특가)은 <b>KST 환산</b>, 기기 로컬로 저장되는 항목(출석 · 무료뽑기 · 티켓 · 시즌)은 <b>원본 그대로</b> 표시합니다.</span>
+    <span>UTC로 저장되는 항목(마지막 저장 · 판정 시각 · 장부 · 상점 특가)은 <b>KST 환산</b>, 기기 로컬로 저장되는 항목(출석 · 무료뽑기 · 티켓 · 시즌)은 <b>원본 그대로</b> 표시합니다.</span>
     <span>"미래" 판정은 <b>지금 시각</b> 대비입니다. 세이브를 받은 지 오래됐다면 미래 폭이 줄어든 상태로 보입니다.</span>
-    <span>읽을 수 있는 형식: <b>MAIL1</b>(암호화 메일, 신버전) · <b>GZ1</b>(압축 메일, 구버전) · <b>평문 Base64</b>(더 구버전 메일 / 1.1.61 이하 세이브 파일) · <b>ENC1</b>(1.1.62+ 세이브 파일) · <b>JSON 원문</b>. 구버전 유저 데이터도 그대로 판독됩니다.</span>
   </div>
 
   <div id="summary-strip"></div>
@@ -182,8 +183,7 @@
         <b>평문 Base64</b>는 1.1.61 이하 구버전 빌드의 세이브 파일 형식이고,
         <b>ENC1 암호화본</b>은 1.1.62+ 빌드의 세이브 파일 형식(AES-256 + HMAC, 분석할 때마다 IV가 달라져 내용이 매번 다르게 보이는 게 정상)입니다.
         테스트할 빌드 버전에 맞는 쪽을 세이브 파일에 넣으세요 — 1.1.62+ 빌드는 BundleCode가 1.1.62 이상인 평문 세이브를 거부합니다.
-        1.1.62+ 유저에게 복원용으로 건넬 때는 <b>ENC1 쪽만</b> 주세요 (평문을 주면 메일 암호화의 의미가 없어집니다).
-        GZ1 압축본·MAIL1 메일본은 압축 해제한 바이트를 그대로 인코딩하므로 원본과 바이트 단위로 동일하며, <b>[BACKUP]</b> 접두사는 제외되어 있습니다.
+        GZ1 압축본은 압축 해제한 바이트를 그대로 인코딩하므로 원본과 바이트 단위로 동일하며, <b>[BACKUP]</b> 접두사는 제외되어 있습니다.
       </div>
     </div>
 
@@ -221,16 +221,14 @@ const TH_STRIKE_DECAY_DAYS   = 60;        // Gamemanager.StrikeDecayDays
 const TH_OFFLINE_FLAG        = 5;         // Gamemanager.OfflineFlagThreshold
 const KST_MS                 = 9 * 3600e3;
 
-const GZ_MARK   = "GZ1:";    // 구버전 압축 메일
-const MAIL_MARK = "MAIL1:";  // 신버전 암호화 메일 (gzip → AES → Base64URL)
+const GZ_MARK = "GZ1:";
 
 /* ═══════════════════════════════════════════════════════════════
-   SaveCrypto 재현 — C# SaveCrypto.cs 와 반드시 동기화할 것
-   세이브 파일: "ENC1:"  + Base64   ( IV(16) + AES-256-CBC 암호문 + HMAC-SHA256(32) )
-   문의 메일:   "MAIL1:" + Base64URL( IV(16) + AES-256-CBC 암호문 + HMAC-SHA256(32) )
+   SaveCrypto 재현 (ENC1) — C# SaveCrypto.cs 와 반드시 동기화할 것
+   포맷: "ENC1:" + Base64( IV(16) + AES-256-CBC 암호문 + HMAC-SHA256(32) )
    키: seed = K1 XOR K2,
-       세이브  aes = SHA256(seed + "CatGunner.save.aes"),  mac = SHA256(seed + "CatGunner.save.mac")
-       메일    aes = SHA256(seed + "CatGunner.mail.aes"),  mac = SHA256(seed + "CatGunner.mail.mac")
+       aesKey = SHA256(seed + "CatGunner.save.aes")
+       macKey = SHA256(seed + "CatGunner.save.mac")
    ★ C# 쪽 K1/K2를 배포 전 교체하면 아래 두 배열도 똑같이 바꿔야 함.
    ★ 이 파일에 키가 들어가므로 뷰어는 절대 외부에 공유 금지.
    ═══════════════════════════════════════════════════════════════ */
@@ -243,7 +241,7 @@ const ENC_K2 = [
   0x0D,0x19,0xA4,0x63,0xF8,0x9D,0xB6,0xF4,0x04,0xED,0x4E,0x2B,0x29,0x51,0xA4,0xD3,
   0x52,0x91,0x37,0x29,0xCD,0x72,0x69,0x5D,0x48,0x74,0x9C,0x75,0x30,0x3A,0xA3,0xA7
 ];
-let _encKeys = null;   // {save:{aes,mac}, mail:{aes,mac}}
+let _encKeys = null;   // {aes: CryptoKey, mac: CryptoKey}
 
 function cryptoAvailable(){
   return typeof crypto !== "undefined" && crypto.subtle && typeof crypto.subtle.digest === "function";
@@ -256,60 +254,47 @@ async function encEnsureKeys(){
   for(let i=0;i<32;i++) seed[i] = ENC_K1[i] ^ ENC_K2[i];
   const te = new TextEncoder();
   const concat = (a,b)=>{ const r=new Uint8Array(a.length+b.length); r.set(a,0); r.set(b,a.length); return r; };
-  const derive = label => crypto.subtle.digest("SHA-256", concat(seed, te.encode(label)));
-  const pair = async (aesLabel, macLabel)=>({
-    aes: await crypto.subtle.importKey("raw", await derive(aesLabel), {name:"AES-CBC"}, false, ["encrypt","decrypt"]),
-    mac: await crypto.subtle.importKey("raw", await derive(macLabel), {name:"HMAC", hash:"SHA-256"}, false, ["sign","verify"])
-  });
+  const aesRaw = await crypto.subtle.digest("SHA-256", concat(seed, te.encode("CatGunner.save.aes")));
+  const macRaw = await crypto.subtle.digest("SHA-256", concat(seed, te.encode("CatGunner.save.mac")));
   _encKeys = {
-    save: await pair("CatGunner.save.aes", "CatGunner.save.mac"),   // 세이브 파일 (ENC1)
-    mail: await pair("CatGunner.mail.aes", "CatGunner.mail.mac")    // 문의 메일 (MAIL1)
+    aes: await crypto.subtle.importKey("raw", aesRaw, {name:"AES-CBC"}, false, ["encrypt","decrypt"]),
+    mac: await crypto.subtle.importKey("raw", macRaw, {name:"HMAC", hash:"SHA-256"}, false, ["sign","verify"])
   };
   return _encKeys;
 }
-/* 바이트 → IV+암호문+MAC (C# SaveCrypto.Seal) */
-async function sealBytes(data, k){
-  const iv = crypto.getRandomValues(new Uint8Array(16));
-  const cipher = new Uint8Array(await crypto.subtle.encrypt({name:"AES-CBC", iv}, k.aes, data)); // PKCS7
-  const body = new Uint8Array(16 + cipher.length);
-  body.set(iv,0); body.set(cipher,16);
-  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", k.mac, body));
-  const blob = new Uint8Array(body.length + 32);
-  blob.set(body,0); blob.set(mac, body.length);
-  return blob;
-}
-/* IV+암호문+MAC → {result:'ok'|'tampered'|'corrupt', data:Uint8Array|null} (C# SaveCrypto.Open) */
-async function openBytes(blob, k){
-  if(!blob || blob.length < 16+16+32) return {result:"corrupt", data:null};
-  const bodyLen = blob.length - 32;
-  const body = blob.subarray(0, bodyLen), mac = blob.subarray(bodyLen);
-  const macOk = await crypto.subtle.verify("HMAC", k.mac, mac, body);
-  try{
-    const data = new Uint8Array(await crypto.subtle.decrypt(
-      {name:"AES-CBC", iv: blob.subarray(0,16)}, k.aes, blob.subarray(16, bodyLen)));
-    return {result: macOk ? "ok" : "tampered", data};
-  }catch(e){
-    return {result:"corrupt", data:null};
-  }
-}
-/* 세이브 파일용 (ENC1): 평문(Base64 JSON 문자열) ↔ "ENC1:..." — C# Encrypt/TryDecrypt 와 동일 */
+/* 평문(Base64 JSON 문자열) → "ENC1:..." (C# Encrypt와 동일: 문자열의 UTF-8 바이트를 암호화) */
 async function encEncrypt(plainText){
-  const k = (await encEnsureKeys()).save;
-  return ENC_MARK + bytesToB64(await sealBytes(new TextEncoder().encode(plainText || ""), k));
+  const k = await encEnsureKeys();
+  const iv = crypto.getRandomValues(new Uint8Array(16));
+  const data = new TextEncoder().encode(plainText || "");
+  const cipher = new Uint8Array(await crypto.subtle.encrypt({name:"AES-CBC", iv}, k.aes, data)); // PKCS7
+  const body = new Uint8Array(iv.length + cipher.length);
+  body.set(iv,0); body.set(cipher, iv.length);
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", k.mac, body));
+  const blob = new Uint8Array(body.length + mac.length);
+  blob.set(body,0); blob.set(mac, body.length);
+  return ENC_MARK + bytesToB64(blob);
 }
+/* "ENC1:..." → {result:'ok'|'tampered'|'corrupt', plain} (C# TryDecrypt와 동일 정책) */
 async function encDecrypt(stored){
   let blob;
   try{ blob = b64ToBytes(stored.substring(ENC_MARK.length).replace(/\s+/g,"")); }
   catch(e){ return {result:"corrupt", plain:null}; }
-  const r = await openBytes(blob, (await encEnsureKeys()).save);
-  return {result:r.result, plain: r.data ? new TextDecoder("utf-8").decode(r.data) : null};
-}
-/* 문의 메일용 (MAIL1): "MAIL1:..." → gzip 바이트 — C# TryDecryptMail 과 동일 */
-async function mailDecrypt(stored){
-  let blob;
-  try{ blob = b64ToBytes(stored.substring(MAIL_MARK.length).replace(/\s+/g,"")); }
-  catch(e){ return {result:"corrupt", data:null}; }
-  return openBytes(blob, (await encEnsureKeys()).mail);
+  if(blob.length < 16+16+32) return {result:"corrupt", plain:null};
+  const k = await encEnsureKeys();
+  const bodyLen = blob.length - 32;
+  const body = blob.subarray(0, bodyLen);
+  const mac  = blob.subarray(bodyLen);
+  const macOk = await crypto.subtle.verify("HMAC", k.mac, mac, body);
+  try{
+    const iv = blob.subarray(0,16);
+    const cipher = blob.subarray(16, bodyLen);
+    const data = await crypto.subtle.decrypt({name:"AES-CBC", iv}, k.aes, cipher);
+    const plain = new TextDecoder("utf-8").decode(data);
+    return {result: macOk ? "ok" : "tampered", plain};
+  }catch(e){
+    return {result:"corrupt", plain:null};
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -319,7 +304,6 @@ let LAST_DATA = null;   // 파싱된 세이브 객체
 let LAST_JSON = "";     // 원본 JSON 텍스트 (재직렬화 아님)
 let LAST_B64  = "";     // 세이브 파일 형식 Base64(JSON) — 구버전/평문
 let LAST_ENC  = "";     // 세이브 파일 형식 "ENC1:..." — 1.1.62+ 암호화
-let LAST_TAMPERED = false; // HMAC 불일치 (ENC1 / MAIL1)
 let AMNESTY_B64 = "";
 let AMNESTY_ENC = "";
 let ERA = null;         // 스키마 세대 판정 결과
@@ -332,7 +316,7 @@ const TZ_MODE = "auto";   // 스키마 세대로 UTC/로컬 저장을 자동 판
    구버전(시간검증 이전) 세이브는 'utc' 항목도 전부 로컬로 취급한다.
    ═══════════════════════════════════════════════════════════════ */
 const FIELD_TZ = {
-  LastSaveTime:'utc', CloudSaveTime:'utc', LastTrustedUtc:'utc',
+  LastSaveTime:'utc', LastTrustedUtc:'utc',
   TimeHack_FlagDate:'utc', TimeHack_ServerDate:'utc', TimeStrike_LastServer:'utc',
   OfflineFailLastDate:'utc',
   LastDailyCorePurchase_Date:'utc', LastWeeklyCorePurchase_Date:'utc', LastWeekly6000CorePurchase_Date:'utc',
@@ -366,7 +350,8 @@ const ITEM_NAMES = {
   45:"자동다이아 성장 패키지", 46:"자동다이아 추가 패키지",
   47:"펫 스텝업 1단계", 48:"펫 스텝업 2단계", 49:"펫 스텝업 3단계",
   50:"펫 스텝업 4단계", 51:"펫 스텝업 5단계",
-  52:"주간 펫 상점 1", 53:"주간 펫 상점 2", 54:"주간 펫 상점 3"
+  52:"주간 펫 상점 1", 53:"주간 펫 상점 2", 54:"주간 펫 상점 3",
+  55:"스페셜 스킨 1", 56:"초강화환생"
 };
 function itemName(idx){ return ITEM_NAMES[idx] || ("알 수 없는 상품 #"+idx); }
 
@@ -616,9 +601,7 @@ function fmtTicksShort(t){
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   디코딩 — JSON / URL 인코딩 / MAIL1 암호화 메일 / ENC1 암호화 파일 /
-            GZ1 압축본 / 구버전 Base64 / [BACKUP]
-   (구버전 형식은 전부 그대로 유지 — 이전 유저 데이터 호환)
+   디코딩 — JSON / URL 인코딩 / GZ1 압축본 / 구버전 Base64 / [BACKUP]
    ═══════════════════════════════════════════════════════════════ */
 function b64ToBytes(s){
   const std = s.replace(/-/g,"+").replace(/_/g,"/");
@@ -658,11 +641,9 @@ async function decodeInput(rawInput){
   let s = rawInput.trim();
   const backup = /\[BACKUP\]/i.test(s);
 
-  // 1) JSON 원문
   let o = tryParseJson(s);
   if(o) return {data:o, how:"JSON 원문", backup, json:s, b64:utf8ToB64(s)};
 
-  // 2) URL 인코딩된 본문 (mailto 그대로 복사된 경우)
   if(/%[0-9A-Fa-f]{2}/.test(s)){
     try{
       const u = decodeURIComponent(s);
@@ -672,22 +653,7 @@ async function decodeInput(rawInput){
     }catch(e){}
   }
 
-  // 3) 신버전 문의 메일 (MAIL1) — 본문에 섞여 있어도 토큰만 추출 → 복호화 → gzip 해제 → JSON
-  const mm = s.match(new RegExp(MAIL_MARK + "([A-Za-z0-9_\\-+/=\\s]+)"));
-  if(mm){
-    const dec = await mailDecrypt(MAIL_MARK + mm[1]);
-    if(dec.result === "corrupt")
-      throw new Error("메일 세이브를 복호화하지 못했습니다. 문자열이 잘렸거나 편집됐거나, 게임 빌드의 암호화 키(K1/K2)가 뷰어와 다릅니다.");
-    const jsonBytes = await gunzipToBytes(dec.data);
-    const json = new TextDecoder("utf-8").decode(jsonBytes);
-    o = tryParseJson(json);
-    if(o) return {data:o, how:"메일 복호화(MAIL1) → 압축 해제 → JSON", backup,
-                  json, b64:bytesToB64(jsonBytes),
-                  tampered: dec.result === "tampered"};
-    throw new Error("복호화는 됐지만 내용이 세이브(JSON) 형식이 아닙니다.");
-  }
-
-  // 4) 암호화 세이브 파일 (ENC1, 1.1.62+ 파일 내용 그대로)
+  // 암호화 세이브(1.1.62+ 파일 내용 그대로) — 본문에 섞여 있어도 토큰만 추출
   const me = s.match(new RegExp(ENC_MARK + "([A-Za-z0-9+/=\\s]+)"));
   if(me){
     const dec = await encDecrypt(ENC_MARK + me[1]);
@@ -705,7 +671,6 @@ async function decodeInput(rawInput){
     throw new Error("복호화는 됐지만 내용이 세이브(Base64 JSON) 형식이 아닙니다.");
   }
 
-  // 5) 구버전 압축 메일 (GZ1)
   const m = s.match(new RegExp(GZ_MARK + "([A-Za-z0-9_\\-+/=\\s]+)"));
   if(m){
     const token = m[1].replace(/\s+/g,"");
@@ -716,7 +681,6 @@ async function decodeInput(rawInput){
     return null;
   }
 
-  // 6) 더 구버전 — 무압축 평문 Base64 (메일 / 1.1.61 이하 세이브 파일)
   const b64 = s.replace(/\s+/g,"").replace(/^\[BACKUP\]/i,"");
   if(/^[A-Za-z0-9+/=_-]+$/.test(b64)){
     try{
@@ -1068,9 +1032,7 @@ function cardBasic(d){
   return card("기본 정보",
     row("게임 버전", (ERA.version ? esc(ERA.version) : noneHtml("-")) + sub(ERA.label)) +
     row("마지막 저장", field(d,'LastSaveTime', v=>fmtStamp(v,'LastSaveTime'))) +
-    row("마지막 클라우드 저장", field(d,'CloudSaveTime', v=> v
-        ? fmtStamp(v,'CloudSaveTime')
-        : noneHtml("클라우드 저장 이력 없음"))) +
+    row("마지막 클라우드 저장", field(d,'CloudSaveTime', v=> v ? esc(v)+sub("원본 그대로") : noneHtml())) +
     row("총 플레이 시간", field(d,'TotalPlayTime', fmtPlayTime)) +
     row("리뷰 작성", field(d,'is_reviewed', v=>fmtBool(v))) +
     row("튜토리얼", field(d,'TutorialCleared', v=>fmtBool(v,"완료","미완료"))) +
@@ -1105,6 +1067,7 @@ function cardCurrency(d){
     row("골드", field(d,'Money', fmtInfVal)) +
     row("누적 골드", field(d,'Money_Accum', fmtInfVal)) +
     row("루비", field(d,'Ruby', fmtInfVal)) +
+    row("슈퍼루비", field(d,'SuperRuby', fmtInfVal)) +
     row("다이아", field(d,'Dia', v=>fmtNum(v)) + " " +
         field(d,'_getDia', v=>sub("획득 "+divDia(v))) + field(d,'_useDia', v=>sub("사용 "+divDia(v)))) +
     row("펫 코인", field(d,'PetCoin', fmtNum)) +
@@ -1360,10 +1323,16 @@ function cardSeason(d){
 }
 
 function cardRebirthFreecash(d){
-  return card("강화환생 · 프리캐시",
+  return card("환생 · 프리캐시",
     row("강화환생(광고) 오늘 사용", field(d,'UpgradeRebirth_UseCount', v=>fmtNum(v)+"회")) +
     row("강화환생(인앱) 오늘 사용", field(d,'UpgradeRebirth_IAP_UseCount', v=>fmtNum(v)+"회")) +
     row("강화환생 마지막 사용일", field(d,'UpgradeRebirth_LastDate', v=>fmtStamp(v,'UpgradeRebirth_LastDate',true))) +
+    row("슈퍼루비 업그레이드", field(d,'SuperRuby_Upgrade_Lv', v=>"Lv "+fmtNum(v))) +
+    row("초강화환생 스택", field(d,'SuperRebirth_Stack', fmtNum)) +
+    row("초강화환생 이번 주 사용", (has(d,'SuperRebirth_Ad_UseCount')||has(d,'SuperRebirth_IAP_UseCount'))
+        ? esc("광고 "+(+d.SuperRebirth_Ad_UseCount||0)+"회 · 인앱 "+(+d.SuperRebirth_IAP_UseCount||0)+"회")
+          + field(d,'SuperRebirth_WeekKey', v=>sub("주차 키 "+(v||"없음")))
+        : absentHtml()) +
     row("프리캐시 연동 보상", field(d,'FreeCash_LinkRewardReceived', v=>fmtBool(v,"수령","미수령"))) +
     row("리워드 광고 제거 혜택", field(d,'FreeCash_RewardAdRemoved', v=>fmtBool(v,"적용 중","없음"))) +
     row("프리캐시 팝업 로그", field(d,'FreeCash_PopLogSent', v=>fmtBool(v,"전송됨","미전송")))
@@ -1398,7 +1367,6 @@ function render(d){
   /* 요약 배지 */
   const strip = document.getElementById("summary-strip");
   let badges = "";
-  if(LAST_TAMPERED) badges += badge("⚠ 변조 감지 — HMAC 불일치 (외부에서 편집된 데이터)", "on-danger");
   try{
     const a = analyzeTime(d);
     if(a.flagged)                    badges += badge("⚠ 랭킹 차단 · "+(reasonLabel(a.reason)||a.reason||"사유 기록 없음"), "on-danger");
@@ -1438,7 +1406,7 @@ function render(d){
     safeCard(()=>cardTimedPacks(d), "기간제 패키지"),
     safeCard(()=>cardRaid(d), "레이드"),
     safeCard(()=>cardSeason(d), "시즌패스 · 미션"),
-    safeCard(()=>cardRebirthFreecash(d), "강화환생 · 프리캐시"),
+    safeCard(()=>cardRebirthFreecash(d), "환생 · 프리캐시"),
     safeCard(()=>cardMisc(d), "기타 콘텐츠")
   ];
   document.getElementById("grid").innerHTML = g.join("");
@@ -1464,20 +1432,19 @@ async function analyze(){
     note.textContent = "해석 중…";
     decoded = await decodeInput(raw);
   }catch(e){
-    note.textContent = "";
+    note.textContent = inputLenNote(raw);
     showError(e.message || "데이터 해석 중 오류가 발생했습니다.");
     return;
   }
   if(!decoded){
-    note.textContent = "";
-    showError("데이터를 해석할 수 없습니다. JSON 전체 · Base64 · GZ1: 압축본 · MAIL1: 암호화 메일 · ENC1: 암호화 세이브 중 하나가 온전히 복사됐는지 확인해 주세요. (앞뒤 일부만 복사되면 실패합니다)");
+    note.textContent = inputLenNote(raw);
+    showError("데이터를 해석할 수 없습니다. JSON 전체 · Base64 · GZ1: 압축본 · ENC1: 암호화 세이브 중 하나가 온전히 복사됐는지 확인해 주세요. (앞뒤 일부만 복사되면 실패합니다)");
     return;
   }
 
-  LAST_TAMPERED = !!decoded.tampered;
   note.textContent = "해석 방식: " + decoded.how
     + (decoded.backup ? "  ·  ⚠ 백업 파일에서 읽힌 데이터" : "")
-    + (LAST_TAMPERED ? "  ·  ⚠ 변조 감지 (HMAC 불일치 — 외부에서 편집된 데이터)" : "");
+    + (decoded.tampered ? "  ·  ⚠ 변조 감지 (HMAC 불일치 — 외부에서 편집된 파일)" : "");
   LAST_B64 = decoded.b64 || "";
   LAST_JSON = decoded.json || "";
   AMNESTY_B64 = ""; AMNESTY_ENC = "";
@@ -1501,7 +1468,7 @@ function renderRaw(decoded){
       + (decoded.backup ? " · [BACKUP] 접두사 제거됨" : "")
     : "";
 }
-/* 평문 Base64 → ENC1 암호화본 생성 (1.1.62+ 테스트·복원용) */
+/* 평문 Base64 → ENC1 암호화본 생성 (1.1.62+ 테스트용) */
 async function renderEnc(){
   LAST_ENC = "";
   const ta = document.getElementById("raw-enc");
@@ -1565,1592 +1532,42 @@ function clearAll(){
   document.getElementById("enc-note").textContent = "";
   document.getElementById("amnesty-b64").value = "";
   document.getElementById("amnesty-diff").innerHTML = "";
-  LAST_B64=""; LAST_ENC=""; LAST_JSON=""; LAST_DATA=null; LAST_TAMPERED=false; AMNESTY_B64=""; AMNESTY_ENC=""; ERA=null;
+  LAST_B64=""; LAST_ENC=""; LAST_JSON=""; LAST_DATA=null; AMNESTY_B64=""; AMNESTY_ENC=""; ERA=null;
 }
 
-document.getElementById("input").addEventListener("paste", ()=> setTimeout(analyze, 50));
-document.getElementById("file").addEventListener("change", function(){
-  const f = this.files && this.files[0];
-  if(!f) return;
-  const r = new FileReader();
-  r.onload = () => { document.getElementById("input").value = String(r.result||""); analyze(); };
-  r.onerror = () => showError("파일을 읽지 못했습니다.");
-  r.readAsText(f);
+/* 입력 길이 안내 — 잘림 여부를 원본과 비교할 수 있게 */
+function inputLenNote(raw){
+  const s = String(raw||"");
+  const tail = s.trim().slice(-12);
+  return "입력 " + s.length.toLocaleString("ko-KR") + "자 · 끝부분 …" + tail;
+}
+
+/* 붙여넣기: 브라우저 기본 삽입을 기다리지 않고 클립보드 원문을 직접 받아 넣는다.
+   (모바일 키보드/IME가 긴 텍스트를 나눠 넣거나, 삽입 전에 분석이 먼저 돌아 잘려 보이는 문제 방지) */
+document.getElementById("input").addEventListener("paste", function(e){
+  const cd = e.clipboardData || window.clipboardData;
+  const text = cd ? cd.getData("text/plain") || cd.getData("text") : "";
+  if(text){
+    e.preventDefault();
+    this.value = text;
+    analyze();
+  }else{
+    setTimeout(analyze, 300);   // 원문을 못 받는 환경: 기본 삽입 후 분석
+  }
 });
-</script>
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cat Gunner 세이브 데이터 뷰어</title>
-<style>
-  :root{
-    --bg:#F3F4F7; --card:#FFFFFF; --ink:#22262E; --sub:#6B7280;
-    --line:#E4E6EB; --accent:#E8890C; --accent-soft:#FFF3E0;
-    --ok:#16A34A; --ok-soft:#EAF7EF; --no:#9CA3AF; --no-soft:#F1F2F4;
-    --danger:#DC2626; --danger-soft:#FDECEC;
-    --warn:#B45309; --warn-soft:#FBF1DE;
-    --vip:#7C3AED; --vip-soft:#F1EAFD; --lux:#B45309; --lux-soft:#FBF1DE;
-    --mono:"SF Mono","Cascadia Mono","Consolas",ui-monospace,monospace;
-  }
-  *{box-sizing:border-box; margin:0; padding:0;}
-  body{
-    background:var(--bg); color:var(--ink);
-    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
-    font-size:14px; line-height:1.5; padding:24px 16px 80px;
-  }
-  .wrap{max-width:1080px; margin:0 auto;}
-  header{display:flex; align-items:baseline; gap:10px; margin-bottom:14px; flex-wrap:wrap;}
-  header h1{font-size:20px; font-weight:800; letter-spacing:-.02em;}
-  header .tag{font-size:12px; color:var(--sub); font-weight:600;}
 
-  .input-card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:14px;}
-  textarea{
-    width:100%; min-height:110px; resize:vertical;
-    border:1px solid var(--line); border-radius:8px; padding:10px 12px;
-    font-family:var(--mono); font-size:12px; color:var(--ink); background:#FAFBFC;
-  }
-  textarea:focus{outline:2px solid var(--accent); outline-offset:-1px;}
-  .input-row{display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;}
-  button.primary{background:var(--accent); color:#fff; border:none; border-radius:8px; padding:9px 22px; font-size:14px; font-weight:700; cursor:pointer;}
-  button.primary:hover{filter:brightness(1.06);}
-  button.ghost{background:none; border:1px solid var(--line); border-radius:8px; padding:9px 14px; font-size:13px; color:var(--sub); cursor:pointer;}
-  button.ghost:hover{border-color:var(--sub);}
-  button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
-  label.filebtn{display:inline-block; border:1px solid var(--line); border-radius:8px; padding:9px 14px; font-size:13px; color:var(--sub); cursor:pointer;}
-  label.filebtn:hover{border-color:var(--sub);}
-  label.filebtn input{display:none;}
-  #decode-note{font-size:12px; color:var(--sub);}
-  #error-box{display:none; margin-top:10px; background:var(--danger-soft); color:var(--danger); border-radius:8px; padding:10px 12px; font-size:13px; font-weight:600;}
-
-  /* ── 상단 도구 막대 ── */
-
-  .legend{display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--sub); margin-bottom:20px; padding-left:2px;}
-  .legend b{color:var(--ink); font-weight:700;}
-
-  #summary-strip{display:none; flex-wrap:wrap; gap:8px; margin-bottom:16px;}
-  .badge{display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:6px 14px; font-size:13px; font-weight:700; background:var(--no-soft); color:var(--no);}
-  .badge .dot{width:8px; height:8px; border-radius:50%; background:currentColor;}
-  .badge.on-ok{background:var(--ok-soft); color:var(--ok);}
-  .badge.on-danger{background:var(--danger-soft); color:var(--danger);}
-  .badge.on-warn{background:var(--warn-soft); color:var(--warn);}
-  .badge.on-vip{background:var(--vip-soft); color:var(--vip);}
-  .badge.on-lux{background:var(--lux-soft); color:var(--lux);}
-  .badge.on-accent{background:var(--accent-soft); color:var(--accent);}
-
-  #result{display:none;}
-  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(320px,1fr)); gap:14px;}
-  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px 18px;}
-  .card.wide{grid-column:1 / -1;}
-  .card h2{font-size:13px; font-weight:800; letter-spacing:.02em; color:var(--sub); text-transform:uppercase; margin-bottom:12px; display:flex; align-items:center; gap:6px;}
-  .card h2::before{content:""; width:4px; height:14px; border-radius:2px; background:var(--accent);}
-  .card.danger{border-color:#F3BDBD; background:#FFFCFC;}
-  .card.danger h2{color:var(--danger);} .card.danger h2::before{background:var(--danger);}
-  .card.warn{border-color:#F2D9A6; background:#FFFDF7;}
-  .card.warn h2{color:var(--warn);} .card.warn h2::before{background:var(--warn);}
-  .card.ok{border-color:#BFE6CD;} .card.ok h2{color:var(--ok);} .card.ok h2::before{background:var(--ok);}
-  .card-note{font-size:12px; color:var(--sub); margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); line-height:1.6;}
-
-  .kv{display:grid; grid-template-columns:minmax(120px,42%) 1fr; row-gap:7px; column-gap:12px;}
-  .kv .k{color:var(--sub); font-size:13px;}
-  .kv .v{font-family:var(--mono); font-size:13px; word-break:break-all;}
-  .yes{color:var(--ok); font-weight:700; font-family:inherit;}
-  .no-v{color:var(--no); font-family:inherit;}
-  .warn-v{color:var(--danger); font-weight:800; font-family:inherit;}
-  .caut-v{color:var(--warn); font-weight:800; font-family:inherit;}
-  .absent{color:var(--no); font-family:inherit; font-style:italic;}
-  .sub-note{font-size:11px; color:var(--sub); font-family:inherit;}
-
-  /* ── 제재 카드 ── */
-  .status-line{display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap;}
-  .status-pill{border-radius:999px; padding:6px 16px; font-size:14px; font-weight:800;}
-  .status-pill.danger{background:var(--danger); color:#fff;}
-  .status-pill.warn{background:var(--warn); color:#fff;}
-  .status-pill.ok{background:var(--ok); color:#fff;}
-  .status-pill.info{background:#1E3A8A; color:#fff;}
-  .status-title{font-size:15px; font-weight:800; letter-spacing:-.01em;}
-  .verdict{border-radius:8px; padding:12px 14px; margin-bottom:14px; font-size:13px; line-height:1.65;}
-  .verdict ul{list-style:disc; margin:0; padding-left:18px;}
-  .verdict li{margin:3px 0;}
-  .verdict.danger{background:var(--danger-soft); color:#7F1D1D;}
-  .verdict.warn{background:var(--warn-soft); color:#78350F;}
-  .verdict.info{background:#EEF3FB; color:#1E3A8A;}
-  .verdict.ok{background:var(--ok-soft); color:#14532D;}
-  .th-h3{font-size:12px; font-weight:800; color:var(--sub); letter-spacing:.02em; margin:18px 0 6px;}
-  table.th{width:100%; border-collapse:collapse; font-size:12.5px;}
-  table.th th{text-align:left; color:var(--sub); font-weight:700; padding:5px 8px; border-bottom:1px solid var(--line); white-space:nowrap;}
-  table.th td{padding:5px 8px; border-bottom:1px solid #F0F1F3; vertical-align:top; font-family:var(--mono);}
-  table.th td.plain{font-family:inherit;}
-  table.th tr.bad td{background:var(--danger-soft);}
-  table.th tr.bad td.plain{color:var(--danger); font-weight:700;}
-  .chklist{margin:6px 0 0; padding-left:18px; font-size:13px; line-height:1.7;}
-
-  table.pack{width:100%; border-collapse:collapse; font-size:13px;}
-  table.pack td{padding:6px 4px; border-bottom:1px solid var(--line);}
-  table.pack tr:last-child td{border-bottom:none;}
-  table.pack td:last-child{text-align:right;}
-
-  details{margin-top:10px;}
-  details summary{cursor:pointer; font-size:13px; font-weight:700; color:var(--sub);}
-  .txn-list{margin-top:8px; max-height:220px; overflow:auto; background:#FAFBFC; border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-family:var(--mono); font-size:11px; line-height:1.8; word-break:break-all;}
-  pre.raw{margin-top:8px; max-height:420px; overflow:auto; background:#FAFBFC; border:1px solid var(--line); border-radius:8px; padding:12px; font-family:var(--mono); font-size:11px; line-height:1.6;}
-  .raw-tools{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;}
-  .raw-tools button.ghost{padding:6px 12px; font-size:12px; color:var(--ink);}
-  textarea.b64{margin-top:8px; min-height:140px; max-height:420px; font-size:11px; line-height:1.6; word-break:break-all; background:#FAFBFC;}
-  .pw-btn{border:none; background:var(--no-soft); color:var(--sub); border-radius:6px; padding:2px 8px; font-size:11px; cursor:pointer; margin-left:6px;}
-  .render-fail{color:var(--danger); font-size:12px; font-weight:600;}
-  @media (max-width:640px){ .kv{grid-template-columns:1fr;} .kv .k{margin-top:4px;} }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <header>
-    <h1>Cat Gunner 세이브 데이터 뷰어</h1>
-    <span class="tag">고객 세이브 판독용</span>
-  </header>
-
-  <div class="input-card">
-    <textarea id="input" placeholder="세이브 데이터를 그대로 붙여넣으세요. (JSON · Base64 · GZ1 · MAIL1 · ENC1 · 메일 본문 통째로도 가능)"></textarea>
-    <div class="input-row">
-      <button class="primary" onclick="analyze()">분석하기</button>
-      <label class="filebtn">세이브 파일 열기<input type="file" id="file" accept=".txt,.json,.dat,.sav,*/*"></label>
-      <button class="ghost" onclick="clearAll()">초기화</button>
-      <span id="decode-note"></span>
-    </div>
-    <div id="error-box"></div>
-  </div>
-
-  <div class="legend">
-    <span>UTC로 저장되는 항목(마지막 저장 · 클라우드 저장 · 판정 시각 · 장부 · 상점 특가)은 <b>KST 환산</b>, 기기 로컬로 저장되는 항목(출석 · 무료뽑기 · 티켓 · 시즌)은 <b>원본 그대로</b> 표시합니다.</span>
-    <span>"미래" 판정은 <b>지금 시각</b> 대비입니다. 세이브를 받은 지 오래됐다면 미래 폭이 줄어든 상태로 보입니다.</span>
-    <span>읽을 수 있는 형식: <b>MAIL1</b>(암호화 메일, 신버전) · <b>GZ1</b>(압축 메일, 구버전) · <b>평문 Base64</b>(더 구버전 메일 / 1.1.61 이하 세이브 파일) · <b>ENC1</b>(1.1.62+ 세이브 파일) · <b>JSON 원문</b>. 구버전 유저 데이터도 그대로 판독됩니다.</span>
-  </div>
-
-  <div id="summary-strip"></div>
-
-  <div id="result">
-    <div id="ban-zone" style="margin-bottom:14px;"></div>
-    <div class="grid" id="grid"></div>
-
-    <div class="card wide" style="margin-top:14px;">
-      <h2>원본 JSON</h2>
-      <div class="raw-tools">
-        <button class="ghost" onclick="copyText(LAST_JSON, this)">JSON 복사</button>
-        <button class="ghost" onclick="downloadText(LAST_JSON, rawFileName('json'))">.json 저장</button>
-      </div>
-      <details><summary>전체 데이터 펼치기</summary><pre class="raw" id="raw-json"></pre></details>
-    </div>
-
-    <div class="card wide" style="margin-top:14px;">
-      <h2>원본 Base64 (세이브 파일 형식)</h2>
-      <div class="raw-tools">
-        <button class="ghost" onclick="copyText(LAST_B64, this)">Base64 복사</button>
-        <button class="ghost" onclick="downloadText(LAST_B64, rawFileName('txt'))">파일로 저장</button>
-        <span class="sub-note" id="b64-note"></span>
-      </div>
-      <details><summary>Base64 펼치기</summary><textarea class="b64" id="raw-b64" readonly spellcheck="false"></textarea></details>
-
-      <div class="raw-tools" style="margin-top:14px;">
-        <button class="ghost" onclick="copyText(LAST_ENC, this)">암호화본(ENC1) 복사</button>
-        <button class="ghost" onclick="downloadText(LAST_ENC, rawFileName('enc.txt'))">파일로 저장</button>
-        <span class="sub-note" id="enc-note"></span>
-      </div>
-      <details><summary>암호화본(ENC1) 펼치기</summary><textarea class="b64" id="raw-enc" readonly spellcheck="false"></textarea></details>
-
-      <div class="card-note">
-        <b>평문 Base64</b>는 1.1.61 이하 구버전 빌드의 세이브 파일 형식이고,
-        <b>ENC1 암호화본</b>은 1.1.62+ 빌드의 세이브 파일 형식(AES-256 + HMAC, 분석할 때마다 IV가 달라져 내용이 매번 다르게 보이는 게 정상)입니다.
-        테스트할 빌드 버전에 맞는 쪽을 세이브 파일에 넣으세요 — 1.1.62+ 빌드는 BundleCode가 1.1.62 이상인 평문 세이브를 거부합니다.
-        1.1.62+ 유저에게 복원용으로 건넬 때는 <b>ENC1 쪽만</b> 주세요 (평문을 주면 메일 암호화의 의미가 없어집니다).
-        GZ1 압축본·MAIL1 메일본은 압축 해제한 바이트를 그대로 인코딩하므로 원본과 바이트 단위로 동일하며, <b>[BACKUP]</b> 접두사는 제외되어 있습니다.
-      </div>
-    </div>
-
-    <div class="card wide" id="amnesty-card" style="margin-top:14px; display:none;">
-      <h2>사면 세이브 생성 (관리자용)</h2>
-      <div class="raw-tools">
-        <button class="ghost" onclick="buildAmnesty()">차단 해제 세이브 만들기</button>
-        <button class="ghost" onclick="copyText(AMNESTY_B64, this)">Base64 복사</button>
-        <button class="ghost" onclick="copyText(AMNESTY_ENC, this)">암호화본(ENC1) 복사</button>
-        <button class="ghost" onclick="downloadText(AMNESTY_B64, rawFileName('unban.txt'))">파일로 저장</button>
-        <span class="sub-note" id="amnesty-note">원본 JSON을 문자열 단위로만 수정하므로 다른 값은 1바이트도 변하지 않습니다.</span>
-      </div>
-      <div id="amnesty-diff"></div>
-      <details><summary>결과 Base64 펼치기</summary><textarea class="b64" id="amnesty-b64" readonly spellcheck="false"></textarea></details>
-      <div class="card-note">
-        <b>is_TimeHacker</b> 해제, <b>TimeStrike / TimeStrike_Log / TimeStrike_LastServer</b> 초기화,
-        <b>TimeHack_FlagDate / ServerDate / Reason</b> 비우기, <b>OfflineFailStreak / OfflineFailLastDate</b> 초기화,
-        <b>TimeLedger</b> 비우기, 필요 시 <b>_getDia</b> 보정으로 다이아 정합성 복구를 수행합니다.
-        비공식 설치(사이드로드 · Xcode 빌드)로 인한 차단은 세이브로 해제할 수 없습니다.
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-"use strict";
-
-/* ═══════════════════════════════════════════════════════════════
-   클라이언트와 반드시 동기화할 상수 (Time_manager / Gamemanager)
-   ═══════════════════════════════════════════════════════════════ */
-const TH_TOL_SEC             = 30 * 60;   // Time_manager.GainToleranceSec
-const TH_TOL_SAME_SESSION    = 5 * 60;    // Time_manager.GainToleranceSameSessionSec
-const TH_STRIKE_TO_FLAG      = 2;         // Gamemanager.StrikeToFlag
-const TH_STRIKE_DECAY_DAYS   = 60;        // Gamemanager.StrikeDecayDays
-const TH_OFFLINE_FLAG        = 5;         // Gamemanager.OfflineFlagThreshold
-const KST_MS                 = 9 * 3600e3;
-
-const GZ_MARK   = "GZ1:";    // 구버전 압축 메일
-const MAIL_MARK = "MAIL1:";  // 신버전 암호화 메일 (gzip → AES → Base64URL)
-
-/* ═══════════════════════════════════════════════════════════════
-   SaveCrypto 재현 — C# SaveCrypto.cs 와 반드시 동기화할 것
-   세이브 파일: "ENC1:"  + Base64   ( IV(16) + AES-256-CBC 암호문 + HMAC-SHA256(32) )
-   문의 메일:   "MAIL1:" + Base64URL( IV(16) + AES-256-CBC 암호문 + HMAC-SHA256(32) )
-   키: seed = K1 XOR K2,
-       세이브  aes = SHA256(seed + "CatGunner.save.aes"),  mac = SHA256(seed + "CatGunner.save.mac")
-       메일    aes = SHA256(seed + "CatGunner.mail.aes"),  mac = SHA256(seed + "CatGunner.mail.mac")
-   ★ C# 쪽 K1/K2를 배포 전 교체하면 아래 두 배열도 똑같이 바꿔야 함.
-   ★ 이 파일에 키가 들어가므로 뷰어는 절대 외부에 공유 금지.
-   ═══════════════════════════════════════════════════════════════ */
-const ENC_MARK = "ENC1:";
-const ENC_K1 = [
-  0x96,0xA6,0x8C,0xF6,0x68,0xFA,0xA5,0xFC,0xD4,0x3A,0x26,0xAB,0x43,0xB4,0xCF,0x61,
-  0x9A,0x5A,0xB0,0x39,0xE7,0x2F,0x9D,0xD8,0xD4,0x4F,0x3B,0x1A,0x26,0x80,0x07,0xA1
-];
-const ENC_K2 = [
-  0x0D,0x19,0xA4,0x63,0xF8,0x9D,0xB6,0xF4,0x04,0xED,0x4E,0x2B,0x29,0x51,0xA4,0xD3,
-  0x52,0x91,0x37,0x29,0xCD,0x72,0x69,0x5D,0x48,0x74,0x9C,0x75,0x30,0x3A,0xA3,0xA7
-];
-let _encKeys = null;   // {save:{aes,mac}, mail:{aes,mac}}
-
-function cryptoAvailable(){
-  return typeof crypto !== "undefined" && crypto.subtle && typeof crypto.subtle.digest === "function";
-}
-async function encEnsureKeys(){
-  if(_encKeys) return _encKeys;
-  if(!cryptoAvailable())
-    throw new Error("이 환경에서는 암호화 기능을 쓸 수 없습니다. 파일을 로컬(file://)이나 https에서 크롬/엣지로 열어 주세요.");
-  const seed = new Uint8Array(32);
-  for(let i=0;i<32;i++) seed[i] = ENC_K1[i] ^ ENC_K2[i];
-  const te = new TextEncoder();
-  const concat = (a,b)=>{ const r=new Uint8Array(a.length+b.length); r.set(a,0); r.set(b,a.length); return r; };
-  const derive = label => crypto.subtle.digest("SHA-256", concat(seed, te.encode(label)));
-  const pair = async (aesLabel, macLabel)=>({
-    aes: await crypto.subtle.importKey("raw", await derive(aesLabel), {name:"AES-CBC"}, false, ["encrypt","decrypt"]),
-    mac: await crypto.subtle.importKey("raw", await derive(macLabel), {name:"HMAC", hash:"SHA-256"}, false, ["sign","verify"])
-  });
-  _encKeys = {
-    save: await pair("CatGunner.save.aes", "CatGunner.save.mac"),   // 세이브 파일 (ENC1)
-    mail: await pair("CatGunner.mail.aes", "CatGunner.mail.mac")    // 문의 메일 (MAIL1)
-  };
-  return _encKeys;
-}
-/* 바이트 → IV+암호문+MAC (C# SaveCrypto.Seal) */
-async function sealBytes(data, k){
-  const iv = crypto.getRandomValues(new Uint8Array(16));
-  const cipher = new Uint8Array(await crypto.subtle.encrypt({name:"AES-CBC", iv}, k.aes, data)); // PKCS7
-  const body = new Uint8Array(16 + cipher.length);
-  body.set(iv,0); body.set(cipher,16);
-  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", k.mac, body));
-  const blob = new Uint8Array(body.length + 32);
-  blob.set(body,0); blob.set(mac, body.length);
-  return blob;
-}
-/* IV+암호문+MAC → {result:'ok'|'tampered'|'corrupt', data:Uint8Array|null} (C# SaveCrypto.Open) */
-async function openBytes(blob, k){
-  if(!blob || blob.length < 16+16+32) return {result:"corrupt", data:null};
-  const bodyLen = blob.length - 32;
-  const body = blob.subarray(0, bodyLen), mac = blob.subarray(bodyLen);
-  const macOk = await crypto.subtle.verify("HMAC", k.mac, mac, body);
+/* 버튼으로 클립보드 직접 읽기 (키보드 붙여넣기를 거치지 않음) */
+async function pasteFromClipboard(){
   try{
-    const data = new Uint8Array(await crypto.subtle.decrypt(
-      {name:"AES-CBC", iv: blob.subarray(0,16)}, k.aes, blob.subarray(16, bodyLen)));
-    return {result: macOk ? "ok" : "tampered", data};
+    if(!navigator.clipboard || !navigator.clipboard.readText) throw new Error("unsupported");
+    const text = await navigator.clipboard.readText();
+    if(!text){ showError("클립보드가 비어 있습니다."); return; }
+    document.getElementById("input").value = text;
+    analyze();
   }catch(e){
-    return {result:"corrupt", data:null};
+    showError("이 브라우저에서는 클립보드를 직접 읽을 수 없습니다. 입력창을 길게 눌러 '붙여넣기'를 사용하거나, 세이브를 .txt 파일로 저장해 '세이브 파일 열기'로 불러와 주세요.");
   }
 }
-/* 세이브 파일용 (ENC1): 평문(Base64 JSON 문자열) ↔ "ENC1:..." — C# Encrypt/TryDecrypt 와 동일 */
-async function encEncrypt(plainText){
-  const k = (await encEnsureKeys()).save;
-  return ENC_MARK + bytesToB64(await sealBytes(new TextEncoder().encode(plainText || ""), k));
-}
-async function encDecrypt(stored){
-  let blob;
-  try{ blob = b64ToBytes(stored.substring(ENC_MARK.length).replace(/\s+/g,"")); }
-  catch(e){ return {result:"corrupt", plain:null}; }
-  const r = await openBytes(blob, (await encEnsureKeys()).save);
-  return {result:r.result, plain: r.data ? new TextDecoder("utf-8").decode(r.data) : null};
-}
-/* 문의 메일용 (MAIL1): "MAIL1:..." → gzip 바이트 — C# TryDecryptMail 과 동일 */
-async function mailDecrypt(stored){
-  let blob;
-  try{ blob = b64ToBytes(stored.substring(MAIL_MARK.length).replace(/\s+/g,"")); }
-  catch(e){ return {result:"corrupt", data:null}; }
-  return openBytes(blob, (await encEnsureKeys()).mail);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   전역 상태
-   ═══════════════════════════════════════════════════════════════ */
-let LAST_DATA = null;   // 파싱된 세이브 객체
-let LAST_JSON = "";     // 원본 JSON 텍스트 (재직렬화 아님)
-let LAST_B64  = "";     // 세이브 파일 형식 Base64(JSON) — 구버전/평문
-let LAST_ENC  = "";     // 세이브 파일 형식 "ENC1:..." — 1.1.62+ 암호화
-let LAST_TAMPERED = false; // HMAC 불일치 (ENC1 / MAIL1)
-let AMNESTY_B64 = "";
-let AMNESTY_ENC = "";
-let ERA = null;         // 스키마 세대 판정 결과
-const TZ_MODE = "auto";   // 스키마 세대로 UTC/로컬 저장을 자동 판별
-
-/* ═══════════════════════════════════════════════════════════════
-   저장 시각 기준표
-     'utc'   : Time_manager.UtcNow 로 저장
-     'local' : 기기 로컬 시각으로 저장 (환산하지 않음)
-   구버전(시간검증 이전) 세이브는 'utc' 항목도 전부 로컬로 취급한다.
-   ═══════════════════════════════════════════════════════════════ */
-const FIELD_TZ = {
-  LastSaveTime:'utc', CloudSaveTime:'utc', LastTrustedUtc:'utc',
-  TimeHack_FlagDate:'utc', TimeHack_ServerDate:'utc', TimeStrike_LastServer:'utc',
-  OfflineFailLastDate:'utc',
-  LastDailyCorePurchase_Date:'utc', LastWeeklyCorePurchase_Date:'utc', LastWeekly6000CorePurchase_Date:'utc',
-  PlusPack_Purchase_Dates:'utc', PurchaseHistory_Dates:'utc',
-  LastCheck_Date:'local', Free_GachaDate:'local', TicketCharge_Date:'local',
-  Mission_SeasonEnd_Date:'local', Mission_MissionStart_Date:'local',
-  Adventure_LastTicketCharge_Date:'local', UpgradeRebirth_LastDate:'local',
-  StepUp_Start_Date:'local', Raid_Entry_Charge_Date:'local',
-  PetStepUp_Start_Date:'local', AD_AutoUpgrade_LastDate:'local',
-  AD_Daily_Gun_LastDate:'local', AD_Daily_Pet_LastDate:'local',
-  Coupang_LastGet_Date:'local', Adventure_AD_Reduce_LastDate:'local',
-  InstallDate:'utc', SegmentPost_LastDate:'utc'
-};
-
-/* 구매 상품 이력 매핑 — Shop_manager.ItemIdxFromProductId 와 동일하게 유지할 것 */
-const ITEM_NAMES = {
-  1:"다이아 dia_0", 2:"다이아 dia_1", 3:"다이아 dia_2", 4:"다이아 dia_3", 5:"다이아 dia_4",
-  6:"강제 광고 제거", 7:"모든 광고 제거", 8:"자동업그레이드 팩", 9:"버프 팩",
-  10:"다이아 팩", 11:"광산 팩", 12:"VIP 패스",
-  13:"코어 100", 14:"코어 500", 15:"코어 1050", 16:"코어 3300",
-  17:"일일 코어 특가 750", 18:"주간 코어 특가 1750", 22:"주간 코어 특가 6000",
-  19:"Luxury 패스", 20:"Luxury 업그레이드", 21:"강화환생 1회권",
-  23:"스텝업 1단계", 24:"스텝업 2단계", 25:"스텝업 3단계", 26:"스텝업 4단계", 27:"스텝업 5단계",
-  28:"주간 총 상점 1", 29:"주간 총 상점 2", 30:"주간 총 상점 3",
-  31:"다이아 dia_0 (첫 구매 2배)", 32:"다이아 dia_1 (첫 구매 2배)",
-  33:"다이아 dia_2 (첫 구매 2배)", 34:"다이아 dia_3 (첫 구매 2배)",
-  35:"다이아 dia_4 (첫 구매 2배)",
-  36:"VIP 시간 패키지", 37:"VIP 추가 보상 패키지", 38:"VIP 편의 패키지",
-  39:"레이드 티켓", 40:"레이드 저금통 1", 41:"레이드 저금통 2", 42:"레이드 저금통 3",
-  43:"레이드 주간 미션 티켓", 44:"레이드 도우미",
-  45:"자동다이아 성장 패키지", 46:"자동다이아 추가 패키지",
-  47:"펫 스텝업 1단계", 48:"펫 스텝업 2단계", 49:"펫 스텝업 3단계",
-  50:"펫 스텝업 4단계", 51:"펫 스텝업 5단계",
-  52:"주간 펫 상점 1", 53:"주간 펫 상점 2", 54:"주간 펫 상점 3"
-};
-function itemName(idx){ return ITEM_NAMES[idx] || ("알 수 없는 상품 #"+idx); }
-
-/* 리딤코드 해시 → 원문 — RedeemCode_manager._codes 와 동일하게 유지할 것
-   (새 코드 추가 시 C#에서 Debug.Log(RedeemCode_manager.Hash("코드"))로 뽑은 해시를 여기에도 등록) */
-const REDEEM_CODES = {
-  "9969467bdf9e8e3816bd9ff54353651cfb1efe721b990cdb7145f1026e97ddc0":"catgun2609",
-  "4ab1e911c86aba8dff1b1ae5f4bb1b28df0343fdefba76a885c70a88834a8b45":"lumbercat777",
-  "e6b0a1cbef482e0e6cb69467bb08e7853bb7ff2267ba7c002d315d6df6f93ea4":"diacatbox"
-};
-function redeemUsedHtml(d){
-  if(!has(d,'Redeem_UsedCodes')) return absentHtml();
-  const hashes = String(d.Redeem_UsedCodes||"").split(";").map(x=>x.trim()).filter(Boolean);
-  if(!hashes.length) return noneHtml("사용 이력 없음");
-  const names = hashes.map(h=>REDEEM_CODES[h] || ("미등록 해시 "+h.slice(0,10)+"…"));
-  return esc(hashes.length+"개 사용")+sub(names.join(" · "));
-}
-
-/* ── 레이드 주차 계산 — DailyGun.WeekIndex_return 과 동일 규칙
-      (2024-01-01(월) 기준, 매주 월요일 0시 +1. 기기 로컬 기준이라 뷰어는 KST로 근사) ── */
-const RAID_WEEK_EPOCH_UTC = Date.UTC(2024,0,1);
-const RAID_WEAK_NAMES = ["관통","폭발","레이저","미사일","폭발관통"];
-function weekIndexNow(){
-  const k = new Date(Date.now()+KST_MS);
-  const days = Math.floor((Date.UTC(k.getUTCFullYear(),k.getUTCMonth(),k.getUTCDate()) - RAID_WEEK_EPOCH_UTC)/86400e3);
-  return Math.floor(days/7);
-}
-function seasonState(idx){
-  if(idx===undefined||idx===null||idx===-1) return noneHtml("기록 없음");
-  const now = weekIndexNow();
-  if(idx===now) return esc("#"+idx)+" "+okHtml("이번 주차");
-  if(idx<now)   return esc("#"+idx)+sub("만료 · 현재 #"+now);
-  return esc("#"+idx)+" "+badHtml("미래 주차")+sub("현재 #"+now+" · 시계 조작 흔적");
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   공통 유틸
-   ═══════════════════════════════════════════════════════════════ */
-function has(o,k){ return !!o && Object.prototype.hasOwnProperty.call(o,k); }
-function esc(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-function pad(n){ return String(n).padStart(2,"0"); }
-function absentHtml(){ return '<span class="absent">이 버전에 없는 항목</span>'; }
-function noneHtml(t){ return '<span class="no-v">'+esc(t||"기록 없음")+'</span>'; }
-function okHtml(t){ return '<span class="yes">'+esc(t)+'</span>'; }
-function badHtml(t){ return '<span class="warn-v">'+esc(t)+'</span>'; }
-function cautHtml(t){ return '<span class="caut-v">'+esc(t)+'</span>'; }
-function sub(t){ return ' <span class="sub-note">'+esc(t)+'</span>'; }
-function row(k, vHtml){ return '<div class="k">'+esc(k)+'</div><div class="v">'+vHtml+'</div>'; }
-function card(title, rowsHtml, cls){ return '<div class="card'+(cls?" "+cls:"")+'"><h2>'+esc(title)+'</h2><div class="kv">'+rowsHtml+'</div></div>'; }
-
-/* 키가 아예 없는 구버전 필드와, 값이 비어 있는 신버전 필드를 구분한다 */
-function field(d, key, render){
-  if(!has(d,key)) return absentHtml();
-  try{ return render(d[key]); }
-  catch(e){ return '<span class="render-fail">표시 실패: '+esc(e.message)+'</span>'; }
-}
-function fmtNum(n){
-  if(n===undefined||n===null) return noneHtml("-");
-  if(typeof n==="number") return esc(n.toLocaleString("ko-KR"));
-  return esc(String(n));
-}
-function fmtBool(b, yesText, noText){
-  return b ? '<span class="yes">✓ '+esc(yesText||"예")+'</span>'
-           : '<span class="no-v">✗ '+esc(noText||"아니오")+'</span>';
-}
-function countTrue(arr){ return Array.isArray(arr) ? arr.filter(Boolean).length : 0; }
-function divDia(n){ return (typeof n==="number") ? Math.trunc(n/3) : n; }
-
-/* InfVal(무한값) — 직렬화 구조가 버전마다 다를 수 있어 원본을 함께 보여준다 */
-function fmtInfVal(v){
-  if(v===undefined||v===null) return noneHtml("-");
-  if(typeof v==="number") return esc(v.toLocaleString("ko-KR"));
-  if(typeof v==="string"){ const n=Number(v); return esc(isFinite(n)? n.toLocaleString("ko-KR") : v); }
-  if(typeof v==="object"){
-    const keys = Object.keys(v);
-    let mant=null, exp=null;
-    keys.forEach(k=>{
-      const val=v[k]; if(typeof val!=="number") return;
-      const lk=k.toLowerCase();
-      if(mant===null && /(mant|digit|value|val|num)/.test(lk)) mant=val;
-      else if(exp===null && /(exp|pow|scale|e$)/.test(lk)) exp=val;
-    });
-    let head = "";
-    if(mant!==null && exp!==null){
-      const approx = Math.abs(exp)<300 ? mant*Math.pow(10,exp) : Infinity;
-      head = isFinite(approx)
-        ? esc(approx.toExponential(4))+' <span class="sub-note">추정</span> '
-        : esc(mant+"×10^"+exp)+' <span class="sub-note">추정</span> ';
-    }
-    return head + '<span class="sub-note">'+esc(keys.map(k=>k+":"+JSON.stringify(v[k])).join(", "))+'</span>';
-  }
-  return esc(String(v));
-}
-function fmtPlayTime(sec){
-  if(typeof sec!=="number") return noneHtml("-");
-  const h=Math.floor(sec/3600), m=Math.floor(sec%3600/60);
-  return esc(h+"시간 "+m+"분");
-}
-function fmtStagePair(stage, level){
-  if(typeof stage!=="number"||typeof level!=="number") return noneHtml("-");
-  return esc((stage+1)+"스테이지 "+(level+1)+"웨이브");
-}
-function fmtStageMax(v){
-  if(typeof v!=="number") return noneHtml("-");
-  const st=Math.floor(v/10)+1, wv=(v%10)+1;
-  return esc(st+"스테이지 "+wv+"웨이브")+sub("원본값 "+v.toLocaleString("ko-KR"));
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   스키마 세대 판정 — 구버전 세이브를 안전하게 다루기 위한 핵심
-   JsonUtility 는 public 필드를 항상 직렬화하므로, 키의 유무가 곧 클라 버전이다.
-   ═══════════════════════════════════════════════════════════════ */
-function detectEra(d){
-  const e = {
-    ledger:      has(d,'TimeLedger') && has(d,'TimeStrike'),
-    utcTimes:    has(d,'LastTrustedUtc') || has(d,'SavedOffsetSec'),
-    evidence:    has(d,'TimeHack_Reason') || has(d,'TimeHack_FlagDate'),
-    offlineStreak: has(d,'OfflineFailStreak'),
-    flag:        has(d,'is_TimeHacker'),
-    purchaseHistory: has(d,'PurchaseHistory'),
-    relic:       has(d,'Relics'),
-    adventure:   has(d,'Adventure_Maps'),
-    plusPack:    has(d,'PlusPack_Purchase_Dates'),
-    stepUp:      has(d,'StepUp_Purchased'),
-    dailyGun:    has(d,'DailyGun_Purchase_Counts'),
-    diaPig:      has(d,'diaPig'),
-    version:     (typeof d.BundleCode==="string" && d.BundleCode) ? d.BundleCode : null
-  };
-  if(e.ledger)            { e.id=4; e.label="v4 · 장부 대조 시스템"; }
-  else if(e.utcTimes)     { e.id=3; e.label="v3 · UTC 시각 저장"; }
-  else if(e.evidence)     { e.id=2; e.label="v2 · 타임해커 증거기록"; }
-  else if(e.flag)         { e.id=1; e.label="v1 · 타임해커 플래그만"; }
-  else                    { e.id=0; e.label="v0 · 시간 검증 이전"; }
-  return e;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   시각 파싱 / 표시
-     naive(s) : 문자열의 연·월·일·시·분·초를 그대로 UTC 로 담은 Date
-                (표시할 때는 UTC getter 로 꺼내면 원본 그대로 나온다)
-     absDate  : 저장 기준(UTC/로컬)에 따라 실제 절대 시각으로 환산
-   ═══════════════════════════════════════════════════════════════ */
-function naive(s){
-  if(s===undefined||s===null) return null;
-  s = String(s).trim();
-  if(!s) return null;
-  let m, d=null;
-  if((m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:?\d{2})?$/))){
-    d = new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6], m[7]? +String(m[7]).slice(0,3):0));
-  }else if((m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})\s*Z?$/))){
-    d = new Date(Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]));
-  }else if((m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/))){
-    d = new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));
-  }else if((m = s.match(/^(\d{4})(\d{2})(\d{2})$/))){
-    d = new Date(Date.UTC(+m[1],+m[2]-1,+m[3]));
-  }else{
-    const t = new Date(s);
-    if(!isNaN(t)) d = new Date(Date.UTC(t.getFullYear(),t.getMonth(),t.getDate(),t.getHours(),t.getMinutes(),t.getSeconds()));
-  }
-  if(!d || isNaN(d)) return null;
-  // 구버전 불교력(+543) 오염 보정 — 클라 SanitizeYear 와 같은 규칙
-  const y = d.getUTCFullYear(), ny = new Date().getUTCFullYear();
-  if(y - ny >= 400) d.setUTCFullYear(y - 543);
-  if(d.getUTCFullYear() < 2000) return null;   // 연도 1 = 미사용
-  return d;
-}
-function storageTz(key){
-  if(TZ_MODE==="utc") return "utc";
-  if(TZ_MODE==="local") return "local";
-  const t = FIELD_TZ[key] || "utc";
-  if(ERA && !ERA.utcTimes && t==="utc") return "local";   // 구버전은 전부 로컬 저장
-  return t;
-}
-function absDate(raw, key){
-  const n = naive(raw);
-  if(!n) return null;
-  return storageTz(key)==="utc" ? n : new Date(n.getTime() - KST_MS);   // 로컬 저장은 KST 기기로 가정
-}
-function fmtNaive(n, dateOnly){
-  const ds = n.getUTCFullYear()+"-"+pad(n.getUTCMonth()+1)+"-"+pad(n.getUTCDate());
-  if(dateOnly) return ds;
-  return ds+" "+pad(n.getUTCHours())+":"+pad(n.getUTCMinutes());
-}
-/* 저장값 → 화면 문자열 (UTC 저장이면 KST 환산, 로컬 저장이면 원본 그대로) */
-function fmtStamp(raw, key, dateOnly){
-  if(raw===undefined||raw===null||raw==="") return noneHtml();
-  const n = naive(raw);
-  if(!n) return esc(String(raw))+sub("파싱 불가 — 원본 표시");
-  if(storageTz(key)==="utc"){
-    const k = new Date(n.getTime()+KST_MS);
-    return esc(fmtNaive(k, dateOnly)) + (dateOnly?"":" (KST)") + sub("UTC 원본 "+String(raw).replace(/Z$/,""));
-  }
-  return esc(fmtNaive(n, dateOnly)) + sub("기기 로컬 저장 · 환산 없음");
-}
-function kst(d){
-  if(!d) return "-";
-  const k = new Date(d.getTime()+KST_MS);
-  return fmtNaive(k)+" KST";
-}
-function dur(sec, signed){
-  if(sec===null||sec===undefined||isNaN(sec)) return "-";
-  const s=Math.abs(sec), sign = sec<0 ? "−" : (signed?"+":"");
-  if(s < 3600)  return sign + Math.round(s/60) + "분";
-  if(s < 86400) return sign + (s/3600).toFixed(1) + "시간";
-  const dd=Math.floor(s/86400), hh=Math.round((s%86400)/3600);
-  return sign + dd + "일" + (hh? " "+hh+"시간" : "");
-}
-function refNow(){ return new Date(); }
-
-/* C# DateTime ticks(100ns 단위, 0001-01-01 기준) → 표시. UTC ticks 가정 */
-function ticksToDate(t){
-  const n = +t;
-  if(!n || !isFinite(n)) return null;
-  const ms = (n - 621355968000000000) / 10000;
-  if(ms <= 0) return null;
-  const d = new Date(ms);
-  return isNaN(d) ? null : d;
-}
-/* 펫 스킬 사용 기록 표시.
-   신버전: PetSkill_Clock(앱 가동 중에만 흐르는 시계) 기준 ticks → "클락 기준 n분 전"
-   구버전(Clock 필드 없음): UTC ticks → KST 절대 시각
-   Clock == 0 인 세이브: 구버전 기록 → 로드 시 두 배열이 비워짐 */
-function petSkillUseSub(d){
-  const slots = Array.isArray(d.PetSkill_UseTicks) ? d.PetSkill_UseTicks : null;
-  if(!slots) return "";
-  if(has(d,'PetSkill_Clock')){
-    const clock = +d.PetSkill_Clock || 0;
-    if(clock === 0)
-      return sub("쿨타임 기록은 구버전 형식 — 로드 시 초기화됨");
-    const parts = slots.map(t=>{
-      const n = +t || 0;
-      if(n <= 0) return "기록 없음";
-      const elapsedSec = (clock - n) / 1e7;
-      if(!isFinite(elapsedSec) || elapsedSec < 0) return "기록 이상";
-      return dur(elapsedSec)+" 전";
-    });
-    return sub("슬롯별 마지막 사용(앱 가동시간 기준): "+parts.join(" · "));
-  }
-  return sub("슬롯별 마지막 사용 "+slots.map(t=>fmtTicksShort(t)).join(" · ")+" (KST)");
-}
-
-function fmtTicksShort(t){
-  const d = ticksToDate(t);
-  if(!d) return "-";
-  const k = new Date(d.getTime()+KST_MS);
-  return pad(k.getUTCMonth()+1)+"-"+pad(k.getUTCDate())+" "+pad(k.getUTCHours())+":"+pad(k.getUTCMinutes());
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   디코딩 — JSON / URL 인코딩 / MAIL1 암호화 메일 / ENC1 암호화 파일 /
-            GZ1 압축본 / 구버전 Base64 / [BACKUP]
-   (구버전 형식은 전부 그대로 유지 — 이전 유저 데이터 호환)
-   ═══════════════════════════════════════════════════════════════ */
-function b64ToBytes(s){
-  const std = s.replace(/-/g,"+").replace(/_/g,"/");
-  const p = std.length % 4;
-  const bin = atob(std + (p===2?"==":p===3?"=":""));
-  const bytes = new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
-  return bytes;
-}
-function bytesToB64(bytes){
-  let bin=""; const CH=0x8000;
-  for(let i=0;i<bytes.length;i+=CH) bin += String.fromCharCode.apply(null, bytes.subarray(i,i+CH));
-  return btoa(bin);
-}
-function utf8ToB64(str){ return bytesToB64(new TextEncoder().encode(str)); }
-function b64ToUtf8(s){ return new TextDecoder("utf-8").decode(b64ToBytes(s)); }
-function normalizeB64(s){
-  const std = s.replace(/-/g,"+").replace(/_/g,"/").replace(/=+$/,"");
-  const p = std.length % 4;
-  return std + (p===2?"==":p===3?"=":"");
-}
-function tryParseJson(s){
-  try{ const o=JSON.parse(s); return (o && typeof o==="object") ? o : null; }catch(e){ return null; }
-}
-async function gunzipToBytes(bytes){
-  if(typeof DecompressionStream === "undefined")
-    throw new Error("이 브라우저는 압축 해제를 지원하지 않습니다. 최신 크롬 또는 엣지에서 열어 주세요.");
-  try{
-    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
-    const buf = await new Response(stream).arrayBuffer();
-    return new Uint8Array(buf);
-  }catch(e){
-    throw new Error("압축 해제에 실패했습니다. 문자열이 중간에 잘렸거나 일부만 복사됐을 수 있습니다.");
-  }
-}
-async function decodeInput(rawInput){
-  let s = rawInput.trim();
-  const backup = /\[BACKUP\]/i.test(s);
-
-  // 1) JSON 원문
-  let o = tryParseJson(s);
-  if(o) return {data:o, how:"JSON 원문", backup, json:s, b64:utf8ToB64(s)};
-
-  // 2) URL 인코딩된 본문 (mailto 그대로 복사된 경우)
-  if(/%[0-9A-Fa-f]{2}/.test(s)){
-    try{
-      const u = decodeURIComponent(s);
-      o = tryParseJson(u);
-      if(o) return {data:o, how:"URL 인코딩 해제 → JSON", backup, json:u, b64:utf8ToB64(u)};
-      s = u;
-    }catch(e){}
-  }
-
-  // 3) 신버전 문의 메일 (MAIL1) — 본문에 섞여 있어도 토큰만 추출 → 복호화 → gzip 해제 → JSON
-  const mm = s.match(new RegExp(MAIL_MARK + "([A-Za-z0-9_\\-+/=\\s]+)"));
-  if(mm){
-    const dec = await mailDecrypt(MAIL_MARK + mm[1]);
-    if(dec.result === "corrupt")
-      throw new Error("메일 세이브를 복호화하지 못했습니다. 문자열이 잘렸거나 편집됐거나, 게임 빌드의 암호화 키(K1/K2)가 뷰어와 다릅니다.");
-    const jsonBytes = await gunzipToBytes(dec.data);
-    const json = new TextDecoder("utf-8").decode(jsonBytes);
-    o = tryParseJson(json);
-    if(o) return {data:o, how:"메일 복호화(MAIL1) → 압축 해제 → JSON", backup,
-                  json, b64:bytesToB64(jsonBytes),
-                  tampered: dec.result === "tampered"};
-    throw new Error("복호화는 됐지만 내용이 세이브(JSON) 형식이 아닙니다.");
-  }
-
-  // 4) 암호화 세이브 파일 (ENC1, 1.1.62+ 파일 내용 그대로)
-  const me = s.match(new RegExp(ENC_MARK + "([A-Za-z0-9+/=\\s]+)"));
-  if(me){
-    const dec = await encDecrypt(ENC_MARK + me[1]);
-    if(dec.result === "corrupt")
-      throw new Error("암호화 세이브를 복호화하지 못했습니다. 문자열이 잘렸거나, 게임 빌드의 암호화 키(K1/K2)가 뷰어와 다릅니다.");
-    // plain = 평문 Base64(JSON)
-    const b64p = dec.plain.replace(/\s+/g,"");
-    try{
-      const json = b64ToUtf8(b64p);
-      o = tryParseJson(json);
-      if(o) return {data:o, how:"암호화 해제(ENC1) → JSON", backup,
-                    json, b64:normalizeB64(b64p),
-                    tampered: dec.result === "tampered"};
-    }catch(e){}
-    throw new Error("복호화는 됐지만 내용이 세이브(Base64 JSON) 형식이 아닙니다.");
-  }
-
-  // 5) 구버전 압축 메일 (GZ1)
-  const m = s.match(new RegExp(GZ_MARK + "([A-Za-z0-9_\\-+/=\\s]+)"));
-  if(m){
-    const token = m[1].replace(/\s+/g,"");
-    const jsonBytes = await gunzipToBytes(b64ToBytes(token));
-    const json = new TextDecoder("utf-8").decode(jsonBytes);
-    o = tryParseJson(json);
-    if(o) return {data:o, how:"압축 해제(gzip) → JSON", backup, json, b64:bytesToB64(jsonBytes)};
-    return null;
-  }
-
-  // 6) 더 구버전 — 무압축 평문 Base64 (메일 / 1.1.61 이하 세이브 파일)
-  const b64 = s.replace(/\s+/g,"").replace(/^\[BACKUP\]/i,"");
-  if(/^[A-Za-z0-9+/=_-]+$/.test(b64)){
-    try{
-      const json = b64ToUtf8(b64);
-      o = tryParseJson(json);
-      if(o) return {data:o, how:"Base64 디코딩 → JSON", backup, json, b64:normalizeB64(b64)};
-    }catch(e){}
-  }
-  return null;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   제재 판독
-   ═══════════════════════════════════════════════════════════════ */
-function reasonKind(r){
-  if(!r) return "";
-  r = String(r);
-  if(r.startsWith("obscured_memory")) return "memory";
-  if(r.startsWith("offline_streak"))  return "offline";
-  if(r.startsWith("offline_sessions"))return "offline_sessions";
-  if(r.startsWith("future_gain"))     return "future";
-  if(r.indexOf("wrong")>=0)           return "wrong";
-  if(r.indexOf("cheat")>=0)           return "real";
-  return "unknown";
-}
-function reasonNumber(r){
-  const m = String(r||"").match(/(\d+)/);
-  return m ? +m[1] : null;
-}
-const REASON_LABEL = {
-  memory:"메모리 변조", offline:"오프라인 검사 실패 누적", offline_sessions:"오프라인 검사 실패 누적(세션)",
-  future:"시계 조작 상태에서 보상 수령", wrong:"시계 오차 (구버전 규칙)", real:"시계 점프 (구버전 규칙)",
-  unknown:"알 수 없는 사유"
-};
-function reasonLabel(r){ const k=reasonKind(r); return REASON_LABEL[k] || ""; }
-
-function kindLabel(k){
-  if(!k) return "-";
-  if(k === "daily") return "출석 보상";
-  if(k.indexOf("offline")===0) return "방치 보상" + (k.indexOf(":")>=0 ? " ("+k.split(":")[1]+")" : "");
-  const map = { fish_free:"물고기 무료 가챠", mine_ticket:"광산 티켓 충전", adv_ticket:"어드벤처 티켓 충전",
-                mission_daily:"일일 미션 리셋", season:"시즌 리셋", diapig:"다이아 저금통" };
-  return map[k] || k;
-}
-function trustLabel(t){ return t===2?"동기화":t===1?"추정":t===0?"미동기화":"-"; }
-
-/* TimeStrike_Log: "서버시각|종류|+Xh|n=N;" 반복 */
-function parseStrikes(log){
-  if(!log) return [];
-  return String(log).split(";").map(x=>x.trim()).filter(Boolean).map(x=>{
-    const p = x.split("|");
-    const ah = p[2] ? parseFloat(String(p[2]).replace(/[^\d.\-]/g,"")) : NaN;
-    const n  = p[3] ? parseInt(String(p[3]).replace(/[^\d]/g,""),10) : NaN;
-    return { server: absDate(p[0],'TimeStrike_LastServer'), serverRaw:p[0]||"",
-             kind:p[1]||"", aheadH: isNaN(ah)?null:ah, count: isNaN(n)?null:n };
-  });
-}
-
-function analyzeTime(d){
-  const now = refNow();
-  const a = {};
-
-  a.flagged   = !!d.is_TimeHacker;
-  a.reason    = (has(d,'TimeHack_Reason') && d.TimeHack_Reason) ? String(d.TimeHack_Reason) : "";
-  a.kind      = reasonKind(a.reason);
-  a.reasonNum = reasonNumber(a.reason);
-  a.flagDev   = absDate(d.TimeHack_FlagDate,'TimeHack_FlagDate');
-  a.flagSrv   = absDate(d.TimeHack_ServerDate,'TimeHack_ServerDate');
-  a.flagDiffSec = (a.flagDev && a.flagSrv) ? (a.flagDev - a.flagSrv)/1000 : null;
-  a.hasEvidence = !!(d.TimeHack_FlagDate || d.TimeHack_Reason || d.TimeHack_ServerDate);
-
-  a.strike     = +d.TimeStrike || 0;
-  a.strikes    = parseStrikes(d.TimeStrike_Log);
-  a.strikeLast = absDate(d.TimeStrike_LastServer,'TimeStrike_LastServer');
-
-  a.ledger = Array.isArray(d.TimeLedger) ? d.TimeLedger.map(e=>{
-    const t = e ? absDate(e.gameUtc,'LastTrustedUtc') : null;
-    return { kind:e&&e.kind, trust:e&&e.trust, session:e&&e.session, mono:e&&e.mono,
-             t, aheadSec: t ? (t-now)/1000 : null };
-  }) : [];
-  a.ledgerFuture = a.ledger.filter(e=>e.aheadSec!==null && e.aheadSec > TH_TOL_SEC);
-
-  a.offStreak = +d.OfflineFailStreak || 0;
-  a.offLast   = absDate(d.OfflineFailLastDate,'OfflineFailLastDate');
-
-  a.lastSave  = absDate(d.LastSaveTime,'LastSaveTime');
-  a.lastSaveAhead = a.lastSave ? (a.lastSave-now)/1000 : null;
-  a.floor     = absDate(d.LastTrustedUtc,'LastTrustedUtc');
-  a.floorAhead= a.floor ? (a.floor-now)/1000 : null;
-  a.offsetSec = (typeof d.SavedOffsetSec==="number") ? d.SavedOffsetSec : null;
-  a.hasOffset = !!d.HasSavedOffset;
-
-  a.dia = +d.Dia || 0;
-  const g = +d._getDia||0, u = +d._useDia||0;
-  a.diaExpected = Math.trunc(g/3) - Math.trunc(u/3);
-  a.diaMismatch = has(d,'Dia') && has(d,'_getDia') && has(d,'_useDia') && a.dia !== a.diaExpected;
-
-  /* 클라이언트 IsRankingBlocked = is_ProgramDestroyed() || !IsOfficialInstall() */
-  a.blocked = a.flagged || a.diaMismatch;
-  a.anySignal = a.blocked || a.hasEvidence || a.strike>0 || a.ledger.length>0
-             || (a.lastSaveAhead!==null && a.lastSaveAhead > TH_TOL_SEC)
-             || (a.floorAhead!==null && a.floorAhead > TH_TOL_SEC)
-             || a.offStreak >= 3;
-  return a;
-}
-
-function verdict(a, d){
-  const L=[]; let level="ok", title="", pill="정상";
-
-  if(a.flagged){
-    level="danger"; pill="랭킹 차단";
-    switch(a.kind){
-      case "memory":
-        title = "메모리 변조 감지";
-        break;
-      case "future":
-        title = "시계 조작 상태에서 보상 수령 " + (a.reasonNum || a.strike || "?") + "회";
-        break;
-      case "offline": case "offline_sessions":
-        title = "온라인 시간검사 실패 누적 " + (a.reasonNum || a.offStreak) + (a.kind==="offline" ? "일" : "세션");
-        break;
-      case "wrong": case "real":
-        title = "구버전 시계 오차 판정";
-        if(a.flagDiffSec!==null) L.push("판정 당시 기기 − 서버 차이 "+dur(a.flagDiffSec,true));
-        break;
-      default:
-        title = "타임해커 차단" + (a.reason ? " (사유 코드: "+a.reason+")" : " (사유 기록 없음)");
-    }
-  }else if(a.diaMismatch){
-    level="danger"; pill="랭킹 차단";
-    title = "다이아 정합성 불일치 — 보유 "+a.dia+" ≠ 기대 "+a.diaExpected;
-  }else if(a.strike > 0){
-    level="warn"; pill="경고";
-    title = "시간 경고 "+a.strike+"회 / "+TH_STRIKE_TO_FLAG+"회 차단";
-    if(a.strikeLast){
-      const left = TH_STRIKE_DECAY_DAYS - (refNow()-a.strikeLast)/86400e3;
-      L.push(left>0 ? "감쇠까지 "+Math.ceil(left)+"일" : "감쇠 기간 경과 — 다음 동기화 때 0회로 초기화");
-    }
-  }else if(a.ledgerFuture.length){
-    level="warn"; pill="경고";
-    title = "미대조 보상 중 미래 시각 "+a.ledgerFuture.length+"건";
-    L.push("다음 동기화 시 "+((a.strike+1>=TH_STRIKE_TO_FLAG)?"차단":"경고 1회")+" 처리 예정");
-  }else if(a.lastSaveAhead!==null && a.lastSaveAhead > TH_TOL_SEC){
-    level="warn"; pill="경고";
-    title = "저장 시각이 기준 시각보다 "+dur(a.lastSaveAhead)+" 미래";
-  }else if(a.floorAhead!==null && a.floorAhead > TH_TOL_SEC){
-    level="info"; pill="참고";
-    title = "floor(마지막 신뢰 시각)가 기준 시각보다 "+dur(a.floorAhead)+" 미래";
-  }else if(a.hasEvidence){
-    level="ok"; pill="정상";
-    title = "과거 타임해커 판정 이력 — 현재 해제됨";
-  }else if(a.ledger.length){
-    level="info"; pill="정상";
-    title = "미대조 보상 "+a.ledger.length+"건 (시각 정상 범위)";
-  }else if(a.offStreak >= 3){
-    level="info"; pill="정상";
-    title = "온라인 검사 실패 누적 "+a.offStreak+" / "+TH_OFFLINE_FLAG+"일";
-  }else{
-    level="ok"; pill="정상";
-    title = "제재 신호 없음";
-  }
-
-  /* 결론에 쓰이지 않은 보조 신호 */
-  const extra = [];
-  if(a.diaMismatch && title.indexOf("다이아")!==0) extra.push("다이아 정합성 불일치 ("+a.dia+" ≠ "+a.diaExpected+")");
-  if(a.strike>0 && a.kind!=="future" && title.indexOf("시간 경고")!==0) extra.push("시간 경고 "+a.strike+"회");
-  if(a.ledgerFuture.length && title.indexOf("미대조 보상 중")!==0) extra.push("미래 시각 보상 "+a.ledgerFuture.length+"건 (미대조)");
-  if(a.lastSaveAhead > TH_TOL_SEC && title.indexOf("저장 시각")!==0) extra.push("저장 시각 미래 "+dur(a.lastSaveAhead));
-  if(a.floorAhead > TH_TOL_SEC && title.indexOf("floor")!==0) extra.push("floor 미래 "+dur(a.floorAhead));
-  if(a.offsetSec!==null && Math.abs(a.offsetSec) > 20*3600) extra.push("마지막 동기화 시 기기 시계가 서버보다 "+dur(-a.offsetSec,true));
-  if(a.flagged && a.offStreak>0 && a.kind!=="offline") extra.push("오프라인 누적 "+a.offStreak+"일");
-  if(extra.length) L.push("추가 신호: "+extra.join(" · "));
-
-  return {level, title, pill, lines:L};
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   제재 카드 — 신호가 없어도 항상 표시한다
-   ═══════════════════════════════════════════════════════════════ */
-function banCard(d){
-  const a = analyzeTime(d);
-  const v = verdict(a, d);
-  const cls = v.level==="danger" ? "danger" : v.level==="warn" ? "warn" : v.level==="ok" ? "ok" : "";
-
-  let html = '<div class="card wide '+cls+'"><h2>제재 상태 · 정지 사유</h2>';
-
-  html += '<div class="status-line">'
-        + '<span class="status-pill '+v.level+'">'+esc(v.pill)+'</span>'
-        + '<span class="status-title">'+esc(v.title)+'</span>'
-        + '</div>';
-
-  if(a.flagged || a.hasEvidence){
-    const lbl = reasonLabel(a.reason);
-    html += '<div class="status-line" style="margin-bottom:12px;">'
-          + '<span class="sub-note">판정 사유 코드</span> '
-          + '<code style="font-family:var(--mono); font-size:12.5px;">'+esc(a.reason || "(기록 없음)")+'</code>'
-          + (lbl ? sub("= "+lbl) : "")
-          + '</div>';
-  }
-
-  if(v.lines.length)
-    html += '<div class="verdict '+v.level+'"><ul>'+v.lines.map(x=>'<li>'+esc(x)+'</li>').join("")+'</ul></div>';
-
-  /* 상태 요약 표 */
-  let rows = "";
-  rows += row("랭킹 차단", a.blocked ? badHtml("⚠ 차단 중") : okHtml("차단 없음")
-    + sub("세이브 기준 · 비공식 설치 차단은 여기서 알 수 없음"));
-  rows += row("타임해커 플래그", has(d,'is_TimeHacker')
-    ? (a.flagged ? badHtml("⚠ 설정됨") : okHtml("정상"))
-    : absentHtml());
-  if(a.flagged || a.hasEvidence){
-    rows += row("판정 시각 (기기 시계)", a.flagDev ? esc(kst(a.flagDev))+sub("원본 "+(d.TimeHack_FlagDate||"")) : noneHtml());
-    rows += row("판정 시각 (서버)", a.flagSrv ? esc(kst(a.flagSrv))
-      : noneHtml()+sub("온라인 응답을 못 받은 경로 (오프라인 누적 · 메모리 변조 · 장부 대조)"));
-    rows += row("기기 − 서버 차이", a.flagDiffSec===null ? noneHtml("계산 불가")
-      : (a.flagDiffSec > 20*3600 ? badHtml(dur(a.flagDiffSec,true)) : esc(dur(a.flagDiffSec,true))));
-  }
-  rows += row("시간 경고", has(d,'TimeStrike')
-    ? ((a.strike>0 ? cautHtml(a.strike+"회") : okHtml("0회"))
-       + sub("/ "+TH_STRIKE_TO_FLAG+"회 차단" + (a.strikeLast ? " · 마지막 "+kst(a.strikeLast) : "")))
-    : absentHtml());
-  rows += row("미대조 보상 장부", has(d,'TimeLedger')
-    ? (a.ledger.length
-        ? esc(a.ledger.length+"건") + (a.ledgerFuture.length ? " "+badHtml("미래 시각 "+a.ledgerFuture.length+"건") : "")
-        : okHtml("없음"))
-    : absentHtml());
-  rows += row("다이아 정합성", (has(d,'Dia') && has(d,'_getDia'))
-    ? (a.diaMismatch ? badHtml("불일치")+sub("보유 "+a.dia+" · 기대 "+a.diaExpected)
-                     : okHtml("일치")+sub("보유 "+a.dia))
-    : absentHtml());
-  rows += row("온라인 검사 실패 누적", has(d,'OfflineFailStreak')
-    ? ((a.offStreak>=3 ? cautHtml(a.offStreak+"일") : esc(a.offStreak+"일"))
-       + sub("/ "+TH_OFFLINE_FLAG+"일 차단" + (a.offLast ? " · 마지막 카운트 "+kst(a.offLast).slice(0,10) : "")))
-    : absentHtml());
-  rows += row("마지막 저장 (게임 시각)", has(d,'LastSaveTime')
-    ? (a.lastSave ? esc(kst(a.lastSave)) + (a.lastSaveAhead > TH_TOL_SEC ? " "+badHtml("기준보다 "+dur(a.lastSaveAhead)+" 미래") : "")
-                  : noneHtml())
-    : absentHtml());
-  rows += row("floor (마지막 신뢰 시각)", has(d,'LastTrustedUtc')
-    ? (a.floor ? esc(kst(a.floor)) + (a.floorAhead > TH_TOL_SEC ? " "+badHtml("기준보다 "+dur(a.floorAhead)+" 미래") : "")
-               : noneHtml())
-    : absentHtml());
-  rows += row("서버 오프셋", has(d,'SavedOffsetSec')
-    ? (a.hasOffset && a.offsetSec!==null
-        ? esc(dur(a.offsetSec,true))+sub("서버 − 기기 · 절댓값이 크면 기기 시계가 틀려 있던 것 (교정됨)")
-        : noneHtml("동기화 이력 없음")+sub("아직 시간 보상이 열리지 않은 상태"))
-    : absentHtml());
-  html += '<div class="th-h3">판정 근거 요약</div><div class="kv">'+rows+'</div>';
-
-  /* 스트라이크 내역 */
-  if(a.strikes.length){
-    html += '<div class="th-h3">시간 경고 내역 (TimeStrike_Log)</div>'
-         + '<table class="th"><tr><th>#</th><th>동기화 시각 (서버)</th><th>보상 종류</th><th>앞선 시간</th><th>건수</th><th>해석</th></tr>';
-    a.strikes.forEach((s,i)=>{
-      const interp = s.aheadH===null ? "-" : s.aheadH>=20 ? "일 단위 조작 (출석 · 일일 리셋)" : "시간 단위 (방치보상 · 티켓)";
-      html += '<tr class="bad"><td>'+(i+1)+'</td><td>'+esc(s.server?kst(s.server):s.serverRaw)+'</td>'
-           +  '<td class="plain">'+esc(kindLabel(s.kind))+'</td>'
-           +  '<td>'+esc(s.aheadH===null?"-":"+"+s.aheadH.toFixed(1)+"h")+'</td>'
-           +  '<td>'+esc(s.count===null?"-":s.count)+'</td>'
-           +  '<td class="plain">'+esc(interp)+'</td></tr>';
-    });
-    html += '</table>';
-  }
-
-  /* 장부 */
-  if(a.ledger.length){
-    html += '<div class="th-h3">미대조 보상 장부 (TimeLedger)</div>'
-         + '<table class="th"><tr><th>#</th><th>보상 종류</th><th>기록 시각 (게임)</th><th>기준 대비</th><th>신뢰</th><th>세션</th><th>판정</th></tr>';
-    a.ledger.forEach((e,i)=>{
-      const tol = (e.trust===2) ? TH_TOL_SAME_SESSION : TH_TOL_SEC;
-      const bad = e.aheadSec!==null && e.aheadSec > TH_TOL_SEC;
-      html += '<tr'+(bad?' class="bad"':'')+'><td>'+(i+1)+'</td>'
-           +  '<td class="plain">'+esc(kindLabel(e.kind))+'</td>'
-           +  '<td>'+esc(e.t?kst(e.t):"(파싱 실패)")+'</td>'
-           +  '<td>'+esc(e.aheadSec===null?"-":dur(e.aheadSec,true))+'</td>'
-           +  '<td class="plain">'+esc(trustLabel(e.trust))+'</td>'
-           +  '<td>'+esc(e.session?String(e.session).slice(0,4):"-")+'</td>'
-           +  '<td class="plain">'+(bad?"⚠ 미래 시각":"정상")+sub("허용 "+(tol/60)+"분")+'</td></tr>';
-    });
-    html += '</table>';
-  }
-
-  html += '</div>';
-
-  return html;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   사면 세이브 생성 — 원본 JSON 문자열을 최소 범위만 치환
-   ═══════════════════════════════════════════════════════════════ */
-function jsonSetScalar(src, key, literal){
-  const re = new RegExp('("'+key+'"\\s*:\\s*)(?:"(?:\\\\.|[^"\\\\])*"|true|false|null|-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)');
-  if(!re.test(src)) return {src, changed:false};
-  return {src: src.replace(re, "$1"+literal), changed:true};
-}
-function jsonEmptyArray(src, key){
-  const re = new RegExp('("'+key+'"\\s*:\\s*)\\[[^\\]]*\\]');
-  if(!re.test(src)) return {src, changed:false};
-  return {src: src.replace(re, "$1[]"), changed:true};
-}
-async function buildAmnesty(){
-  if(!LAST_JSON || !LAST_DATA){ return; }
-  let s = LAST_JSON;
-  const done = [];
-
-  const apply = (fn, label) => { const r = fn(s); if(r.changed){ s = r.src; done.push(label); } };
-
-  if(LAST_DATA.is_TimeHacker === true) apply(x=>jsonSetScalar(x,"is_TimeHacker","false"), "is_TimeHacker → false");
-  if(+LAST_DATA.TimeStrike > 0)        apply(x=>jsonSetScalar(x,"TimeStrike","0"), "TimeStrike → 0");
-  if(LAST_DATA.TimeStrike_Log)         apply(x=>jsonSetScalar(x,"TimeStrike_Log",'""'), "TimeStrike_Log 비움");
-  if(LAST_DATA.TimeStrike_LastServer)  apply(x=>jsonSetScalar(x,"TimeStrike_LastServer",'""'), "TimeStrike_LastServer 비움");
-  if(LAST_DATA.TimeHack_FlagDate)      apply(x=>jsonSetScalar(x,"TimeHack_FlagDate",'""'), "TimeHack_FlagDate 비움");
-  if(LAST_DATA.TimeHack_ServerDate)    apply(x=>jsonSetScalar(x,"TimeHack_ServerDate",'""'), "TimeHack_ServerDate 비움");
-  if(LAST_DATA.TimeHack_Reason)        apply(x=>jsonSetScalar(x,"TimeHack_Reason",'""'), "TimeHack_Reason 비움");
-  if(+LAST_DATA.OfflineFailStreak > 0) apply(x=>jsonSetScalar(x,"OfflineFailStreak","0"), "OfflineFailStreak → 0");
-  if(LAST_DATA.OfflineFailLastDate)    apply(x=>jsonSetScalar(x,"OfflineFailLastDate",'""'), "OfflineFailLastDate 비움");
-  if(Array.isArray(LAST_DATA.TimeLedger) && LAST_DATA.TimeLedger.length)
-                                       apply(x=>jsonEmptyArray(x,"TimeLedger"), "TimeLedger 비움");
-
-  const a = analyzeTime(LAST_DATA);
-  if(a.diaMismatch){
-    const fixedGet = 3 * (a.dia + Math.trunc((+LAST_DATA._useDia||0)/3));
-    apply(x=>jsonSetScalar(x,"_getDia",String(fixedGet)), "_getDia → "+fixedGet+" (다이아 정합성 복구)");
-  }
-
-  AMNESTY_B64 = utf8ToB64(s);
-  AMNESTY_ENC = "";
-  let encNote = "";
-  try{ AMNESTY_ENC = await encEncrypt(AMNESTY_B64); }
-  catch(e){ encNote = " · 암호화본 생성 실패: "+e.message; }
-  document.getElementById("amnesty-b64").value = AMNESTY_B64
-    + (AMNESTY_ENC ? "\n\n──── 암호화본 (1.1.62+ 세이브 파일용) ────\n" + AMNESTY_ENC : "");
-  document.getElementById("amnesty-diff").innerHTML = done.length
-    ? '<ul class="chklist">'+done.map(x=>'<li>'+esc(x)+'</li>').join("")+'</ul>'
-    : '<p class="sub-note" style="margin-top:8px;">수정할 항목이 없습니다. 이미 깨끗한 세이브입니다.</p>';
-  document.getElementById("amnesty-note").textContent =
-    AMNESTY_B64.length.toLocaleString("ko-KR")+"자 · 위 목록만 변경되었습니다."+encNote;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   카드 렌더링
-   ═══════════════════════════════════════════════════════════════ */
-function safeCard(fn, title){
-  try{ return fn(); }
-  catch(e){ return '<div class="card"><h2>'+esc(title)+'</h2><p class="render-fail">이 카드를 표시하지 못했습니다: '+esc(e.message)+'</p></div>'; }
-}
-
-function cardBasic(d){
-  return card("기본 정보",
-    row("게임 버전", (ERA.version ? esc(ERA.version) : noneHtml("-")) + sub(ERA.label)) +
-    row("마지막 저장", field(d,'LastSaveTime', v=>fmtStamp(v,'LastSaveTime'))) +
-    row("마지막 클라우드 저장", field(d,'CloudSaveTime', v=> v
-        ? fmtStamp(v,'CloudSaveTime')
-        : noneHtml("클라우드 저장 이력 없음"))) +
-    row("총 플레이 시간", field(d,'TotalPlayTime', fmtPlayTime)) +
-    row("리뷰 작성", field(d,'is_reviewed', v=>fmtBool(v))) +
-    row("튜토리얼", field(d,'TutorialCleared', v=>fmtBool(v,"완료","미완료"))) +
-    row("출석 진행", field(d,'CheckNum', v=>fmtNum(v)+"회차") + " " +
-        field(d,'LastCheck_Date', v=>sub("마지막 "+String(v||"기록 없음")))
-        + field(d,'TotalCheckNum', v=>sub("누적 "+v+"일"))) +
-    row("쿠팡 보상", field(d,'Coupang_LastGet_Date', v=>fmtStamp(v,'Coupang_LastGet_Date',true))) +
-    row("설치일", field(d,'InstallDate', v=> v
-        ? esc(v) + field(d,'InstallDate_Source', s=>sub("출처 "+(s||"-")))
-        : noneHtml("기록 없음"))) +
-    row("리워드 광고 시청", field(d,'RewardAdWatchCount', v=>fmtNum(v)+"회")
-        + field(d,'SegmentPost_LastDate', v=>sub("세그먼트 전송 "+(v||"없음")))) +
-    row("온라인검사 실패 누적", field(d,'OfflineFailStreak', v=>fmtNum(v)+"일") + " " +
-        field(d,'OfflineFailLastDate', v=>sub("마지막 카운트 "+(v||"없음")+" · UTC 날짜")))
-  );
-}
-
-function cardAccount(d){
-  const pw = d.PlayFab_Password ? esc(d.PlayFab_Password) : "";
-  return card("계정 (PlayFab)",
-    row("닉네임", field(d,'PlayFab_DisplayName', v=>esc(v||"-"))) +
-    row("이메일", field(d,'PlayFab_Email', v=>esc(v||"-"))) +
-    row("PlayFab ID", field(d,'PlayFab_Id', v=>esc(v||"-"))) +
-    row("비밀번호", pw
-      ? '<span id="pw-mask">••••••••</span><span id="pw-real" style="display:none">'+pw+'</span><button class="pw-btn" onclick="togglePw(this)">보기</button>'
-      : noneHtml("없음"))
-  );
-}
-
-function cardCurrency(d){
-  return card("보유 재화",
-    row("골드", field(d,'Money', fmtInfVal)) +
-    row("누적 골드", field(d,'Money_Accum', fmtInfVal)) +
-    row("루비", field(d,'Ruby', fmtInfVal)) +
-    row("다이아", field(d,'Dia', v=>fmtNum(v)) + " " +
-        field(d,'_getDia', v=>sub("획득 "+divDia(v))) + field(d,'_useDia', v=>sub("사용 "+divDia(v)))) +
-    row("펫 코인", field(d,'PetCoin', fmtNum)) +
-    row("강화석", field(d,'StarGem', fmtNum)) +
-    row("탐험 코어", field(d,'Adventure_Currency_Core', v=>Array.isArray(v)?esc(v.join(" / ")):noneHtml("-")))
-  );
-}
-
-function cardProgress(d){
-  return card("진행도",
-    row("메인 스테이지", (has(d,'Stage_Now')&&has(d,'Level_Now')) ? fmtStagePair(d.Stage_Now,d.Level_Now) : absentHtml()) +
-    row("최고 스테이지", field(d,'Stage_Value_Max', fmtStageMax)) +
-    row("환생 횟수", field(d,'Rebirth_Count', fmtNum)) +
-    row("보스 스테이지", field(d,'Boss_Stage', fmtNum)) +
-    row("도전(스피드런)", field(d,'SpeedRun_Stage_Now', fmtNum)) +
-    row("사냥", (has(d,'Wave_Now')? "웨이브 "+fmtNum(d.Wave_Now) : absentHtml()) + (has(d,'Lv_Now')? " / Lv "+fmtNum(d.Lv_Now) : "")) +
-    row("탐험 레벨", field(d,'Adventure_Lv', v=>fmtNum(v)) + " " +
-        field(d,'Adventure_Exp', v=>sub("Exp "+v)) + field(d,'Adventure_Ticket_Now', v=>sub("티켓 "+v))) +
-    row("도감", field(d,'Gun_Collect', v=>countTrue(v)+"종 (총)") + " / " + field(d,'Pet_Collect', v=>countTrue(v)+"종 (펫)"))
-  );
-}
-
-function cardEquip(d){
-  return card("장비 · 업그레이드",
-    row("업그레이드 Lv", field(d,'Upgrade_Lv', v=>Array.isArray(v)?esc("공격 "+v[0]+" / 속도 "+v[1]+" / 골드 "+v[2]):noneHtml("-"))) +
-    row("환생 업그레이드", field(d,'Rebirth_Upgrade_Lv', v=>Array.isArray(v)?esc(v.join(" / ")):noneHtml("-"))) +
-    row("장착 총", field(d,'Selected_items', v=>Array.isArray(v)?esc(v.join(", ")):noneHtml("-"))) +
-    row("보유 총 슬롯", field(d,'Owned_Gun_list', v=>Array.isArray(v)?esc(v.filter(x=>x>=0).length+"칸 사용 / "+v.length+"칸"):noneHtml("-"))) +
-    row("총 잠금", (has(d,'Owned_Gun_Pause')||has(d,'Selected_Pause'))
-        ? esc("인벤 "+countTrue(d.Owned_Gun_Pause)+"개 · 장착 "+countTrue(d.Selected_Pause)+"개")
-        : absentHtml()) +
-    row("총 금고", has(d,'Safe_Gun_list')
-        ? (Array.isArray(d.Safe_Gun_list)
-            ? esc(d.Safe_Gun_list.filter(x=>x>=0).length+"칸 사용 / "+d.Safe_Gun_list.length+"칸")
-              + sub("다이아 해금 "+(+d.Safe_Purchased_Count||0)+"칸")
-            : noneHtml("빈 금고"))
-        : absentHtml()) +
-    row("합성 경험", field(d,'Has_Merged', v=>fmtBool(v,"있음","없음"))) +
-    row("광고 보상 무기", field(d,'AD_Gun_Num', v=> v>=0
-        ? esc("#"+v)+ (has(d,'AD_Gun_EndUtcTicks')
-            ? sub("만료 "+(ticksToDate(d.AD_Gun_EndUtcTicks)? kst(ticksToDate(d.AD_Gun_EndUtcTicks)) : "ticks "+d.AD_Gun_EndUtcTicks))
-            :"")
-        : noneHtml("없음"))) +
-    row("일일 광고 뽑기(총)", field(d,'AD_Daily_Gun_LastDate', v=>v? esc(v)+sub("기기 로컬") : noneHtml())) +
-    row("광고 자동강화", (has(d,'AD_AutoUpgrade_RemainSec')||has(d,'AD_AutoUpgrade_LastDate'))
-        ? esc("잔여 "+Math.round(+d.AD_AutoUpgrade_RemainSec||0)+"초")
-          + field(d,'AD_AutoUpgrade_LastDate', v=>sub("마지막 시청 "+(v||"없음")+" · 기기 로컬"))
-        : absentHtml()) +
-    row("스킨", field(d,'Skin_Selected_num', v=>"선택 #"+fmtNum(v)) + " " + field(d,'Skin_Unlock', v=>sub("해금 "+countTrue(v)+"종")) ) +
-    row("유물", field(d,'Relics', v=>Array.isArray(v)? esc(v.filter(r=>r&&r.is_Unlock).length+"종 해금") : noneHtml("-"))) +
-    row("버프 잔여", (has(d,'MoneyBuffTime')? esc("골드 "+Math.round(d.MoneyBuffTime)+"s") : absentHtml())
-        + (has(d,'PowerBuffTime')? esc(" / 공격 "+Math.round(d.PowerBuffTime)+"s") : "")
-        + (has(d,'AtkSpeedBuffTime')? esc(" / 공속 "+Math.round(d.AtkSpeedBuffTime)+"s") : ""))
-  );
-}
-
-function cardPet(d){
-  return card("펫",
-    row("장착 펫", field(d,'Pet_Selected_items', v=>Array.isArray(v)?esc(v.join(", ")):noneHtml("-"))) +
-    row("보유 펫 슬롯", field(d,'Owned_Pet_list', v=>Array.isArray(v)?esc(v.filter(x=>x>=0).length+"칸 사용 / "+v.length+"칸"):noneHtml("-"))) +
-    row("합성(등급) 시드", field(d,'Pet_Type_Seed', v=> v===0
-        ? noneHtml("미발급")+sub("구버전 세이브 — 다음 실행 시 발급")
-        : esc(String(v)))) +
-    row("등급별 획득", field(d,'Pet_Type_Get_Count', v=>Array.isArray(v)
-        ? esc(v.join(" / "))+sub("Z / ZZ / ZZZ 순")
-        : noneHtml("-"))) +
-    row("펫 잠금", (has(d,'Owned_Pet_Pause')||has(d,'Pet_Selected_Pause'))
-        ? esc("인벤 "+countTrue(d.Owned_Pet_Pause)+"개 · 장착 "+countTrue(d.Pet_Selected_Pause)+"개")
-        : absentHtml()) +
-    row("펫 금고", has(d,'Safe_Pet_list')
-        ? (Array.isArray(d.Safe_Pet_list)
-            ? esc(d.Safe_Pet_list.filter(x=>x>=0).length+"칸 사용 / "+d.Safe_Pet_list.length+"칸")
-              + sub("다이아 해금 "+(+d.Pet_Safe_Purchased_Count||0)+"칸")
-            : noneHtml("빈 금고"))
-        : absentHtml()) +
-    row("펫 스킬", (has(d,'PetSkill_Auto')||has(d,'PetSkill_UseTicks'))
-        ? ( (has(d,'PetSkill_Auto') ? (d.PetSkill_Auto? okHtml("자동 사용") : esc("수동 사용")) : "")
-            + petSkillUseSub(d) )
-        : absentHtml()) +
-    row("일일 광고 뽑기(펫)", field(d,'AD_Daily_Pet_LastDate', v=>v? esc(v)+sub("기기 로컬") : noneHtml()))
-  );
-}
-
-function cardShop(d){
-  const packs = [
-    ["VIP 패스", d.Mission_is_Vip, 'Mission_is_Vip'],
-    ["Luxury 패스", d.Mission_is_Luxury, 'Mission_is_Luxury'],
-    ["강제 광고 제거", d.Is_Remove_AD_forced, 'Is_Remove_AD_forced'],
-    ["모든 광고 제거", d.Is_Remove_AD_All, 'Is_Remove_AD_All'],
-    ["자동업그레이드 팩", d.Is_AutoUpgrade_Pack, 'Is_AutoUpgrade_Pack'],
-    ["버프 팩", d.Is_Buff_Pack, 'Is_Buff_Pack'],
-    ["다이아 팩", d.Is_Dia_Pack, 'Is_Dia_Pack'],
-    ["광산 팩", d.Is_Mine_Pack, 'Is_Mine_Pack'],
-    ["자동다이아 성장 패키지", d.Is_AutoDia_Growth, 'Is_AutoDia_Growth'],
-    ["자동다이아 추가 패키지", d.Is_AutoDia_Extra, 'Is_AutoDia_Extra']
-  ];
-  let packTable = '<table class="pack">';
-  packs.forEach(p=>{
-    packTable += "<tr><td>"+esc(p[0])+"</td><td>"+(has(d,p[2])?fmtBool(p[1],"보유","미보유"):absentHtml())+"</td></tr>";
-  });
-  packTable += "</table>";
-
-  const hist = Array.isArray(d.PurchaseHistory) ? d.PurchaseHistory : null;
-  const histDates = Array.isArray(d.PurchaseHistory_Dates) ? d.PurchaseHistory_Dates : [];
-  let histHtml = '<details open><summary>구매 상품 이력 '+(hist? hist.length+"건" : "(이 버전에 없음)")+'</summary>';
-  if(hist && hist.length){
-    const cnt = {};
-    hist.forEach(i=>{ cnt[i]=(cnt[i]||0)+1; });
-    histHtml += '<table class="pack" style="margin-top:8px">';
-    Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a]).forEach(k=>{
-      histHtml += '<tr><td>'+esc(itemName(+k))+'</td><td>'+cnt[k]+'회</td></tr>';
-    });
-    // 날짜 리스트가 짧으면 앞쪽(옛 이력)이 시각 기록 이전 구매분
-    const off = hist.length - histDates.length;
-    histHtml += '</table><div class="txn-list" style="margin-top:8px">'
-      + hist.map((i,n)=>{
-          const raw = (n-off>=0) ? histDates[n-off] : "";
-          const t = raw ? " — "+fmtStamp(raw,'PurchaseHistory_Dates') : sub("시각 기록 없음");
-          return (n+1)+". "+esc(itemName(i))+t;
-        }).join("<br>") + '</div>';
-  }else if(hist){
-    histHtml += '<div class="txn-list">'+noneHtml("기록 없음")+sub("이력 기능 추가 이전 구매는 포함되지 않습니다")+'</div>';
-  }else{
-    histHtml += '<div class="txn-list">'+absentHtml()+sub("PurchaseHistory 필드가 없는 버전의 세이브입니다")+'</div>';
-  }
-  histHtml += '</details>';
-
-  const txns = Array.isArray(d.ProcessedTxnIds) ? d.ProcessedTxnIds : [];
-  const txnHtml = '<details><summary>처리된 결제 트랜잭션 '+txns.length+'건 (최근순 최대 50개 보관)</summary><div class="txn-list">'
-    + (txns.length ? txns.map(t=>esc(t)).join("<br>") : noneHtml("없음")) + "</div></details>";
-
-  return '<div class="card"><h2>상점 · 구매 내역</h2><div class="kv" style="margin-bottom:10px">'
-    + row("총 결제 횟수", field(d,'PurchaseCount', v=>fmtNum(v)+"회"))
-    + row("일일 코어 특가", field(d,'LastDailyCorePurchase_Date', v=>fmtStamp(v,'LastDailyCorePurchase_Date')))
-    + row("주간 코어 특가", field(d,'LastWeeklyCorePurchase_Date', v=>fmtStamp(v,'LastWeeklyCorePurchase_Date')))
-    + row("주간 6000코어 특가", field(d,'LastWeekly6000CorePurchase_Date', v=>fmtStamp(v,'LastWeekly6000CorePurchase_Date')))
-    + row("다이아 첫구매 2배", field(d,'Dia_FirstBuy_Used', v=>Array.isArray(v)? esc(countTrue(v)+"종 사용") : noneHtml("-")))
-    + row("리딤코드 사용", redeemUsedHtml(d))
-    + '</div>' + packTable + histHtml + txnHtml + '</div>';
-}
-
-function cardTimedPacks(d){
-  const names = ["시간 패키지","보상 패키지","편의 패키지"];
-  let plus;
-  if(!has(d,'PlusPack_Purchase_Dates')) plus = absentHtml();
-  else if(!Array.isArray(d.PlusPack_Purchase_Dates)) plus = noneHtml("없음");
-  else{
-    plus = '<div>' + d.PlusPack_Purchase_Dates.map((s,i)=>{
-      const n = names[i] || ("슬롯 "+i);
-      if(!s) return esc(n)+": " + noneHtml("미구매");
-      let state = "";
-      const t = absDate(s,'PlusPack_Purchase_Dates');
-      if(t){
-        const remainSec = (t.getTime() + 7*86400e3 - Date.now())/1000;   // 구매 +7일
-        state = remainSec > 0 ? " "+okHtml("활성")+sub(dur(remainSec)+" 남음")
-                              : " "+noneHtml("만료")+sub(dur(-remainSec)+" 경과");
-      }
-      return esc(n)+": " + fmtStamp(s,'PlusPack_Purchase_Dates') + state;
-    }).join("<br>") + '</div>';
-  }
-  return card("기간제 패키지",
-    row("플러스팩 (7일)", plus) +
-    row("스텝업 구매", field(d,'StepUp_Purchased', v=>Array.isArray(v)? esc(countTrue(v)+" / "+v.length+"단계") : noneHtml("-"))) +
-    row("스텝업 시작일", field(d,'StepUp_Start_Date', v=>fmtStamp(v,'StepUp_Start_Date'))) +
-    row("주간 총 상점", field(d,'DailyGun_Purchase_Counts', v=>Array.isArray(v)? esc(v.join(" / ")+"회") : noneHtml("-"))) +
-    row("주간 키(총)", field(d,'DailyGun_Week_Key', v=>esc(v||"-"))) +
-    row("펫 스텝업 구매", field(d,'PetStepUp_Purchased', v=>Array.isArray(v)? esc(countTrue(v)+" / "+v.length+"단계") : noneHtml("-"))) +
-    row("펫 스텝업 시작일", field(d,'PetStepUp_Start_Date', v=>fmtStamp(v,'PetStepUp_Start_Date'))) +
-    row("주간 펫 상점", field(d,'DailyPet_Purchase_Counts', v=>Array.isArray(v)? esc(v.join(" / ")+"회") : noneHtml("-"))) +
-    row("주간 키(펫)", field(d,'DailyPet_Week_Key', v=>esc(v||"-")))
-  );
-}
-
-function cardRaid(d){
-  let rows = "";
-
-  rows += row("시즌(주차)", field(d,'Raid_Season_Index', v=>seasonState(v)));
-  rows += row("시즌 도전 / 최고", field(d,'Raid_Season_TryCount', v=>fmtNum(v)+"회")
-    + " / " + field(d,'Raid_Season_BestLevel', v=>"Lv."+fmtNum(v)));
-
-  let entry;
-  if(!has(d,'Raid_Free_Use_Count')) entry = absentHtml();
-  else{
-    const parts = ["무료 "+(+d.Raid_Free_Use_Count||0)+"/2"];
-    if(has(d,'Raid_AD_Enter_Used')) parts.push("광고 "+(d.Raid_AD_Enter_Used?"사용":"미사용"));
-    if(has(d,'Raid_IAP_Enter_Used')) parts.push("인앱 "+(d.Raid_IAP_Enter_Used?"사용":"미사용"));
-    entry = esc(parts.join(" · "));
-  }
-  rows += row("오늘 입장 사용", entry);
-  rows += row("입장 기준일", field(d,'Raid_Entry_Charge_Date', v=>fmtStamp(v,'Raid_Entry_Charge_Date',true)));
-
-  rows += row("타입별 역대 최고", field(d,'Raid_Best_Level_ByType', v=>{
-    if(!Array.isArray(v)||!v.length) return noneHtml("기록 없음");
-    return esc("최고 Lv."+Math.max.apply(null,v))+sub("배열 "+v.join(" / ")+" · index = GunType 열거형 순");
-  }));
-
-  rows += row("레이드 도우미", field(d,'Raid_Helper_Season_Index', v=>
-    v===-1 ? noneHtml("미구매") : seasonState(v)));
-
-  rows += row("강화석 저금통", (has(d,'Pig_Lv')||has(d,'Pig_Gem'))
-    ? esc((d.Pig_Lv||1)+"단계 · 적립 "+((+d.Pig_Gem||0).toLocaleString("ko-KR"))+"개")
-      + sub("시즌 내 구매 "+(+d.Pig_PurchaseCount||0)+"회"
-        + (has(d,'Pig_Season_Index') && d.Pig_Season_Index!==-1 ? " · 시즌 #"+d.Pig_Season_Index : ""))
-    : absentHtml());
-
-  rows += row("주간 레이드 미션", has(d,'RaidMission_Season_Index')
-    ? ( d.RaidMission_Season_Index===-1
-        ? noneHtml("기록 없음")
-        : "달성 "+esc(countTrue(d.RaidMission_Clear)+"/"+(Array.isArray(d.RaidMission_Clear)?d.RaidMission_Clear.length:0))
-          + sub("시즌 #"+d.RaidMission_Season_Index
-            + " · 보상 "+countTrue(d.RaidMission_Reward_Get)+"개 · 2회차 "+countTrue(d.RaidMission_Reward_ReGet)+"개"
-            + " · 미션 티켓 "+(d.RaidMission_Ticket?"구매":"미구매")) )
-    : absentHtml());
-
-  rows += row("스타 강화 슬롯", field(d,'Star_Slot_Lv', v=>Array.isArray(v)
-    ? esc("Lv "+v.join(" / "))
-      + (Array.isArray(d.Star_Slot_FailCount)? sub("실패 누적 "+d.Star_Slot_FailCount.join(" / ")) : "")
-    : noneHtml("-")));
-  rows += row("슬롯강화 시드", field(d,'Star_Slot_Seed', v=>Array.isArray(v)
-    ? esc(v.join(" / "))+sub("슬롯별 판정 시드")
-    : noneHtml("-")));
-
-  const wk = weekIndexNow();
-  const note = '<div class="card-note">'
-    + '주차 번호는 2024-01-01(월) 기준으로 매주 월요일 0시에 1씩 증가합니다. 현재 주차 <b>#'+wk+'</b>'
-    + ' · 이번 주 약점 추정: '+esc(RAID_WEAK_NAMES[((wk%5)+5)%5])+'.'
-    + ' "이번 주차" 판정은 KST 기준 계산이라 해외 유저는 월요일 경계에서 ±1 차이가 날 수 있습니다.'
-    + '</div>';
-
-  return '<div class="card"><h2>레이드</h2><div class="kv">'+rows+'</div>'+note+'</div>';
-}
-
-function cardSeason(d){
-  const missionCnt = Array.isArray(d.Mission_ExpGet) ? d.Mission_ExpGet.length : 0;
-  return card("시즌패스 · 미션",
-    row("VIP 패스", field(d,'Mission_is_Vip', v=>fmtBool(v,"보유","미보유"))) +
-    row("Luxury 패스", field(d,'Mission_is_Luxury', v=>fmtBool(v,"보유","미보유"))) +
-    row("시즌 번호", field(d,'Mission_Season_Num', fmtNum)) +
-    row("총 보상 시즌", field(d,'Mission_is_GunSeason', v=>fmtBool(v,"신규 규칙(총)","구 규칙(코어)"))) +
-    row("시즌 시작 여부", field(d,'Mission_is_SeasonStart', v=>fmtBool(v,"시작됨","시작 전"))) +
-    row("미션 시작일", field(d,'Mission_MissionStart_Date', v=>fmtStamp(v,'Mission_MissionStart_Date'))) +
-    row("시즌 종료일", field(d,'Mission_SeasonEnd_Date', v=>fmtStamp(v,'Mission_SeasonEnd_Date'))) +
-    row("패스 레벨 / Exp", field(d,'Mission_Reward_Lv', v=>fmtNum(v)+" Lv") + " / " + field(d,'Mission_Reward_Exp', v=>fmtNum(v)+" Exp")) +
-    row("일일미션 수령", field(d,'Mission_ExpGet', v=>countTrue(v)+" / "+missionCnt) + " " +
-        field(d,'Mission_ExpGet_Luxury', v=>sub("Luxury "+countTrue(v)+"건"))) +
-    row("패스 보상 수령", field(d,'NormalReward_Get', v=>"일반 "+countTrue(v)+"개") + " · " + field(d,'EpicReward_Get', v=>"에픽 "+countTrue(v)+"개")) +
-    row("미션 진행값",
-      field(d,'Mission_TreeCount_Value', v=>"나무 "+fmtNum(v)) + " · " +
-      field(d,'Mission_StageClear_Value', v=>"클리어 "+fmtNum(v)) + " · " +
-      field(d,'Mission_Rebirth_Value', v=>"환생 "+fmtNum(v)) + " · " +
-      field(d,'Mission_PlayMine_Value', v=>"광산 "+fmtNum(v)))
-  );
-}
-
-function cardRebirthFreecash(d){
-  return card("강화환생 · 프리캐시",
-    row("강화환생(광고) 오늘 사용", field(d,'UpgradeRebirth_UseCount', v=>fmtNum(v)+"회")) +
-    row("강화환생(인앱) 오늘 사용", field(d,'UpgradeRebirth_IAP_UseCount', v=>fmtNum(v)+"회")) +
-    row("강화환생 마지막 사용일", field(d,'UpgradeRebirth_LastDate', v=>fmtStamp(v,'UpgradeRebirth_LastDate',true))) +
-    row("프리캐시 연동 보상", field(d,'FreeCash_LinkRewardReceived', v=>fmtBool(v,"수령","미수령"))) +
-    row("리워드 광고 제거 혜택", field(d,'FreeCash_RewardAdRemoved', v=>fmtBool(v,"적용 중","없음"))) +
-    row("프리캐시 팝업 로그", field(d,'FreeCash_PopLogSent', v=>fmtBool(v,"전송됨","미전송")))
-  );
-}
-
-function cardMisc(d){
-  return card("기타 콘텐츠",
-    row("낚시 무료 뽑기", field(d,'FreeGachaCount', v=>fmtNum(v)+"회") + " " +
-        field(d,'Free_GachaDate', v=>sub("기준일 "+String(v||"없음")))) +
-    row("보유 생선", field(d,'FishInventory', v=>Array.isArray(v)? esc(v.length+"마리") : noneHtml("-"))) +
-    row("광산 티켓 사용", field(d,'TicketUse_Count', v=>fmtNum(v)+"회") + " " +
-        field(d,'TicketCharge_Date', v=>sub("충전 기준일 "+String(v||"없음")))) +
-    row("광산 최고 보상", field(d,'Best_Reward', fmtNum)) +
-    row("탐험 광고 단축", (has(d,'Adventure_AD_Reduce_UseCount')||has(d,'Adventure_AD_Reduce_LastDate'))
-        ? esc("오늘 "+(+d.Adventure_AD_Reduce_UseCount||0)+"회")
-          + field(d,'Adventure_AD_Reduce_LastDate', v=>sub("마지막 "+(v||"없음")+" · 기기 로컬"))
-        : absentHtml()) +
-    row("다이아 저금통", field(d,'diaPig', v=> v ? esc((v.Dia_Now||0)+"개")+sub("마지막 틱 "+(v.LastTickTime||"-")) : noneHtml("없음"))) +
-    row("설정", (has(d,'BGM_Mute')? esc("BGM "+(d.BGM_Mute?"음소거":"켜짐")) : absentHtml())
-        + (has(d,'SFX_Mute')? esc(" / 효과음 "+(d.SFX_Mute?"음소거":"켜짐")) : ""))
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   메인 렌더
-   ═══════════════════════════════════════════════════════════════ */
-function render(d){
-  LAST_DATA = d;
-  ERA = detectEra(d);
-
-  /* 요약 배지 */
-  const strip = document.getElementById("summary-strip");
-  let badges = "";
-  if(LAST_TAMPERED) badges += badge("⚠ 변조 감지 — HMAC 불일치 (외부에서 편집된 데이터)", "on-danger");
-  try{
-    const a = analyzeTime(d);
-    if(a.flagged)                    badges += badge("⚠ 랭킹 차단 · "+(reasonLabel(a.reason)||a.reason||"사유 기록 없음"), "on-danger");
-    else if(a.diaMismatch)           badges += badge("⚠ 랭킹 차단 · 다이아 정합성 불일치", "on-danger");
-    else if(a.strike>0)              badges += badge("시간 경고 "+a.strike+"회", "on-warn");
-    else if(a.ledgerFuture.length)   badges += badge("미래 시각 보상 "+a.ledgerFuture.length+"건", "on-warn");
-    else if(a.lastSaveAhead > TH_TOL_SEC) badges += badge("저장 시각 미래", "on-warn");
-    else if(a.hasEvidence)           badges += badge("타임해커 판정 이력 (해제됨)", "on-accent");
-    else                             badges += badge("제재 신호 없음", "on-ok");
-  }catch(e){ badges += badge("제재 판독 실패", "on-danger"); }
-
-  badges += badge(ERA.label, "");
-  badges += badge(d.Mission_is_Vip ? "VIP 패스" : "VIP 미보유", d.Mission_is_Vip ? "on-vip":"");
-  badges += badge(d.Mission_is_Luxury ? "Luxury 패스" : "Luxury 미보유", d.Mission_is_Luxury ? "on-lux":"");
-  [["강제 광고 제거", d.Is_Remove_AD_forced],["모든 광고 제거", d.Is_Remove_AD_All],
-   ["자동업그레이드 팩", d.Is_AutoUpgrade_Pack],["버프 팩", d.Is_Buff_Pack],
-   ["다이아 팩", d.Is_Dia_Pack],["광산 팩", d.Is_Mine_Pack]].forEach(p=>{
-    badges += badge(p[1] ? p[0] : p[0]+" 미보유", p[1] ? "on-ok" : "");
-  });
-  if(d.FreeCash_RewardAdRemoved) badges += badge("프리캐시 리워드광고 제거", "on-accent");
-  badges += badge("결제 "+(d.PurchaseCount||0)+"회", (d.PurchaseCount>0)?"on-accent":"");
-  strip.innerHTML = badges;
-  strip.style.display = "flex";
-
-  /* 제재 카드 */
-  document.getElementById("ban-zone").innerHTML = safeCard(()=>banCard(d), "제재 상태 · 정지 사유");
-
-  /* 나머지 카드 */
-  const g = [
-    safeCard(()=>cardBasic(d), "기본 정보"),
-    safeCard(()=>cardAccount(d), "계정 (PlayFab)"),
-    safeCard(()=>cardCurrency(d), "보유 재화"),
-    safeCard(()=>cardProgress(d), "진행도"),
-    safeCard(()=>cardEquip(d), "장비 · 업그레이드"),
-    safeCard(()=>cardPet(d), "펫"),
-    safeCard(()=>cardShop(d), "상점 · 구매 내역"),
-    safeCard(()=>cardTimedPacks(d), "기간제 패키지"),
-    safeCard(()=>cardRaid(d), "레이드"),
-    safeCard(()=>cardSeason(d), "시즌패스 · 미션"),
-    safeCard(()=>cardRebirthFreecash(d), "강화환생 · 프리캐시"),
-    safeCard(()=>cardMisc(d), "기타 콘텐츠")
-  ];
-  document.getElementById("grid").innerHTML = g.join("");
-
-  document.getElementById("raw-json").textContent = JSON.stringify(d, null, 2);
-  document.getElementById("amnesty-card").style.display = LAST_JSON ? "block" : "none";
-  document.getElementById("result").style.display = "block";
-}
-function badge(label, cls){ return '<span class="badge '+(cls||"")+'"><span class="dot"></span>'+esc(label)+'</span>'; }
-
-/* ═══════════════════════════════════════════════════════════════
-   입출력
-   ═══════════════════════════════════════════════════════════════ */
-async function analyze(){
-  const errBox = document.getElementById("error-box");
-  const note = document.getElementById("decode-note");
-  errBox.style.display="none"; note.textContent="";
-  const raw = document.getElementById("input").value;
-  if(!raw.trim()){ showError("데이터를 붙여넣은 뒤 분석하기를 눌러 주세요."); return; }
-
-  let decoded;
-  try{
-    note.textContent = "해석 중…";
-    decoded = await decodeInput(raw);
-  }catch(e){
-    note.textContent = "";
-    showError(e.message || "데이터 해석 중 오류가 발생했습니다.");
-    return;
-  }
-  if(!decoded){
-    note.textContent = "";
-    showError("데이터를 해석할 수 없습니다. JSON 전체 · Base64 · GZ1: 압축본 · MAIL1: 암호화 메일 · ENC1: 암호화 세이브 중 하나가 온전히 복사됐는지 확인해 주세요. (앞뒤 일부만 복사되면 실패합니다)");
-    return;
-  }
-
-  LAST_TAMPERED = !!decoded.tampered;
-  note.textContent = "해석 방식: " + decoded.how
-    + (decoded.backup ? "  ·  ⚠ 백업 파일에서 읽힌 데이터" : "")
-    + (LAST_TAMPERED ? "  ·  ⚠ 변조 감지 (HMAC 불일치 — 외부에서 편집된 데이터)" : "");
-  LAST_B64 = decoded.b64 || "";
-  LAST_JSON = decoded.json || "";
-  AMNESTY_B64 = ""; AMNESTY_ENC = "";
-  document.getElementById("amnesty-b64").value = "";
-  document.getElementById("amnesty-diff").innerHTML = "";
-
-  try{
-    render(decoded.data);
-  }catch(e){
-    showError("세이브 구조를 표시하는 중 오류가 발생했습니다: "+e.message);
-    return;
-  }
-  renderRaw(decoded);
-  await renderEnc();
-}
-function renderRaw(decoded){
-  document.getElementById("raw-b64").value = LAST_B64;
-  const bytes = LAST_B64 ? b64ToBytes(LAST_B64).length : 0;
-  document.getElementById("b64-note").textContent = LAST_B64
-    ? LAST_B64.length.toLocaleString("ko-KR")+"자 · JSON "+bytes.toLocaleString("ko-KR")+" bytes"
-      + (decoded.backup ? " · [BACKUP] 접두사 제거됨" : "")
-    : "";
-}
-/* 평문 Base64 → ENC1 암호화본 생성 (1.1.62+ 테스트·복원용) */
-async function renderEnc(){
-  LAST_ENC = "";
-  const ta = document.getElementById("raw-enc");
-  const note = document.getElementById("enc-note");
-  ta.value = ""; note.textContent = "";
-  if(!LAST_B64) return;
-  try{
-    LAST_ENC = await encEncrypt(LAST_B64);
-    ta.value = LAST_ENC;
-    note.textContent = LAST_ENC.length.toLocaleString("ko-KR")+"자 · 1.1.62+ 세이브 파일 형식";
-  }catch(e){
-    note.textContent = "암호화 실패: " + e.message;
-  }
-}
-function rawFileName(ext){
-  const d = LAST_DATA || {};
-  const nick = (d.PlayFab_DisplayName || "save").replace(/[^\w가-힣-]+/g,"_");
-  const t = (d.LastSaveTime || "").replace(/[^\d]/g,"").slice(0,12) || "nodate";
-  return "CatGunner_"+nick+"_"+t+"."+ext;
-}
-async function copyText(text, btn){
-  if(!text) return;
-  try{ await navigator.clipboard.writeText(text); }
-  catch(e){
-    const ta = document.createElement("textarea");
-    ta.value = text; ta.style.position="fixed"; ta.style.opacity="0";
-    document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove();
-  }
-  if(btn){ const old = btn.textContent; btn.textContent = "복사됨 ✓"; setTimeout(()=>btn.textContent=old, 1500); }
-}
-function downloadText(text, name){
-  if(!text) return;
-  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-}
-function togglePw(btn){
-  const mask=document.getElementById("pw-mask"), real=document.getElementById("pw-real");
-  const showing = real.style.display !== "none";
-  real.style.display = showing ? "none" : "inline";
-  mask.style.display = showing ? "inline" : "none";
-  btn.textContent = showing ? "보기" : "숨기기";
-}
-function showError(msg){
-  const e = document.getElementById("error-box");
-  e.textContent = msg; e.style.display = "block";
-  document.getElementById("result").style.display = "none";
-  document.getElementById("summary-strip").style.display = "none";
-}
-function clearAll(){
-  document.getElementById("input").value = "";
-  document.getElementById("result").style.display = "none";
-  document.getElementById("summary-strip").style.display = "none";
-  document.getElementById("error-box").style.display = "none";
-  document.getElementById("decode-note").textContent = "";
-  document.getElementById("raw-b64").value = "";
-  document.getElementById("b64-note").textContent = "";
-  document.getElementById("raw-enc").value = "";
-  document.getElementById("enc-note").textContent = "";
-  document.getElementById("amnesty-b64").value = "";
-  document.getElementById("amnesty-diff").innerHTML = "";
-  LAST_B64=""; LAST_ENC=""; LAST_JSON=""; LAST_DATA=null; LAST_TAMPERED=false; AMNESTY_B64=""; AMNESTY_ENC=""; ERA=null;
-}
-
-document.getElementById("input").addEventListener("paste", ()=> setTimeout(analyze, 50));
 document.getElementById("file").addEventListener("change", function(){
   const f = this.files && this.files[0];
   if(!f) return;
