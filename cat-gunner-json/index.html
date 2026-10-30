@@ -1062,6 +1062,24 @@ function cardAccount(d){
   );
 }
 
+/* 유료/무료 다이아 — Gamemanager: 무료 = Dia - PaidDia, 항상 0 <= PaidDia <= Dia.
+   구버전 세이브(PaidDia 없음)는 기존 보유분 전부 무료로 취급된다. */
+function diaPaidHtml(d){
+  if(!has(d,'Dia')) return absentHtml();
+  const total = +d.Dia || 0;
+  if(!has(d,'PaidDia'))
+    return esc("무료 "+total.toLocaleString("ko-KR")+" · 유료 0")
+         + sub("유료 구분 이전 버전 — 보유분 전부 무료로 처리됨");
+  const paid = +d.PaidDia || 0;
+  const free = Math.max(0, total - paid);
+  let html = esc("무료 "+free.toLocaleString("ko-KR")+" · 유료 "+paid.toLocaleString("ko-KR"));
+  if(paid < 0 || paid > total)
+    html += " " + badHtml("범위 이상") + sub("유료가 0~총량 범위를 벗어남 — 로드 시 게임이 보정");
+  else if(total > 0)
+    html += sub("유료 비율 "+Math.round(paid*100/total)+"%");
+  return html;
+}
+
 function cardCurrency(d){
   return card("보유 재화",
     row("골드", field(d,'Money', fmtInfVal)) +
@@ -1070,6 +1088,7 @@ function cardCurrency(d){
     row("슈퍼루비", field(d,'SuperRuby', fmtInfVal)) +
     row("다이아", field(d,'Dia', v=>fmtNum(v)) + " " +
         field(d,'_getDia', v=>sub("획득 "+divDia(v))) + field(d,'_useDia', v=>sub("사용 "+divDia(v)))) +
+    row("다이아 유료 · 무료", diaPaidHtml(d)) +
     row("펫 코인", field(d,'PetCoin', fmtNum)) +
     row("강화석", field(d,'StarGem', fmtNum)) +
     row("탐험 코어", field(d,'Adventure_Currency_Core', v=>Array.isArray(v)?esc(v.join(" / ")):noneHtml("-")))
