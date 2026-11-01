@@ -131,7 +131,7 @@
   </header>
 
   <div class="input-card">
-    <textarea id="input" placeholder="세이브 데이터를 그대로 붙여넣으세요. (JSON · Base64 · GZ1 · 메일 본문 통째로도 가능)"
+    <textarea id="input" placeholder="세이브 데이터를 그대로 붙여넣으세요. (JSON · Base64 · GZ1 · MAIL1 · ENC1 · 메일 본문 통째로도 가능)"
       autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"></textarea>
     <div class="input-row">
       <button class="primary" onclick="analyze()">분석하기</button>
@@ -294,6 +294,52 @@ async function encDecrypt(stored){
     return {result: macOk ? "ok" : "tampered", plain};
   }catch(e){
     return {result:"corrupt", plain:null};
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   문의 메일 암호화 (MAIL1) — C# SaveCrypto.EncryptMail / SaveCompressor.PackForMail 과 동기화
+   포맷: "MAIL1:" + Base64URL( IV(16) + AES-256-CBC( gzip(원본 JSON) ) + HMAC-SHA256(32) )
+   키: 같은 seed 에서 라벨만 다르게 파생
+       aesKey = SHA256(seed + "CatGunner.mail.aes")
+       macKey = SHA256(seed + "CatGunner.mail.mac")
+   ═══════════════════════════════════════════════════════════════ */
+const MAIL_MARK = "MAIL1:";
+let _mailKeys = null;
+
+async function mailEnsureKeys(){
+  if(_mailKeys) return _mailKeys;
+  if(!cryptoAvailable())
+    throw new Error("이 환경에서는 암호화 기능을 쓸 수 없습니다. 파일을 로컬(file://)이나 https에서 크롬/엣지로 열어 주세요.");
+  const seed = new Uint8Array(32);
+  for(let i=0;i<32;i++) seed[i] = ENC_K1[i] ^ ENC_K2[i];
+  const te = new TextEncoder();
+  const concat = (a,b)=>{ const r=new Uint8Array(a.length+b.length); r.set(a,0); r.set(b,a.length); return r; };
+  const aesRaw = await crypto.subtle.digest("SHA-256", concat(seed, te.encode("CatGunner.mail.aes")));
+  const macRaw = await crypto.subtle.digest("SHA-256", concat(seed, te.encode("CatGunner.mail.mac")));
+  _mailKeys = {
+    aes: await crypto.subtle.importKey("raw", aesRaw, {name:"AES-CBC"}, false, ["decrypt"]),
+    mac: await crypto.subtle.importKey("raw", macRaw, {name:"HMAC", hash:"SHA-256"}, false, ["verify"])
+  };
+  return _mailKeys;
+}
+
+/* "MAIL1:..." → {result:'ok'|'tampered'|'corrupt', gz: Uint8Array(gzip 바이트)} — C# TryDecryptMail 과 동일 정책 */
+async function mailDecrypt(stored){
+  let blob;
+  try{ blob = b64ToBytes(stored.substring(MAIL_MARK.length).replace(/\s+/g,"")); }   // Base64URL 허용
+  catch(e){ return {result:"corrupt", gz:null}; }
+  if(blob.length < 16+16+32) return {result:"corrupt", gz:null};
+  const k = await mailEnsureKeys();
+  const bodyLen = blob.length - 32;
+  const body = blob.subarray(0, bodyLen);
+  const mac  = blob.subarray(bodyLen);
+  const macOk = await crypto.subtle.verify("HMAC", k.mac, mac, body);
+  try{
+    const data = await crypto.subtle.decrypt({name:"AES-CBC", iv: blob.subarray(0,16)}, k.aes, blob.subarray(16, bodyLen));
+    return {result: macOk ? "ok" : "tampered", gz: new Uint8Array(data)};
+  }catch(e){
+    return {result:"corrupt", gz:null};
   }
 }
 
@@ -637,6 +683,16 @@ async function gunzipToBytes(bytes){
     throw new Error("압축 해제에 실패했습니다. 문자열이 중간에 잘렸거나 일부만 복사됐을 수 있습니다.");
   }
 }
+/* 마커 뒤에서 잡은 문자열을 공백 단위로 나눠, 긴 것부터 이어붙인 후보 목록.
+   메일 앱이 토큰 중간에 줄바꿈을 넣는 경우와, 토큰 뒤 다음 줄 단어("Platform" 등)가
+   같이 잡히는 경우를 모두 처리한다. 검증(HMAC/gzip)이 통과하는 첫 후보를 쓴다. */
+function tokenCandidates(captured){
+  const parts = String(captured||"").trim().split(/\s+/).filter(Boolean);
+  const out = [];
+  for(let k = parts.length; k >= 1; k--) out.push(parts.slice(0, k).join(""));
+  return out;
+}
+
 async function decodeInput(rawInput){
   let s = rawInput.trim();
   const backup = /\[BACKUP\]/i.test(s);
@@ -653,31 +709,68 @@ async function decodeInput(rawInput){
     }catch(e){}
   }
 
+  // 게임이 메일 생성에 실패했을 때 넣는 상태 문자열
+  if(/\[PACK_ERROR\]/.test(s))
+    throw new Error("메일에 [PACK_ERROR]가 들어 있습니다. 게임이 세이브를 압축·암호화하다 실패해서 데이터가 실리지 않았어요. 유저에게 앱 재실행 후 다시 문의하기를 보내달라고 안내해 주세요.");
+  if(/\[NO_SAVE_FILE\]/.test(s))
+    throw new Error("메일에 [NO_SAVE_FILE]이 들어 있습니다. 문의 당시 기기에 세이브 파일이 없었어요.");
+  if(/\[READ_ERROR\]/.test(s))
+    throw new Error("메일에 [READ_ERROR]가 들어 있습니다. 게임이 세이브 파일을 읽지 못했어요.");
+
+  // 암호화 문의 메일(신버전) — 본문에 섞여 있어도 토큰만 추출
+  const mm = s.match(new RegExp(MAIL_MARK + "([A-Za-z0-9_\\-+/=\\s]+)"));
+  if(mm){
+    let fallback = null;   // HMAC 불일치지만 풀리는 후보 (변조 의심)
+    for(const tok of tokenCandidates(mm[1])){
+      const dec = await mailDecrypt(MAIL_MARK + tok);
+      if(dec.result === "corrupt") continue;
+      let jsonBytes;
+      try{ jsonBytes = await gunzipToBytes(dec.gz); }catch(e){ continue; }
+      const json = new TextDecoder("utf-8").decode(jsonBytes);
+      o = tryParseJson(json);
+      if(!o) continue;
+      const res = {data:o, how:"메일 암호화 해제(MAIL1) → 압축 해제 → JSON", backup,
+                   json, b64:bytesToB64(jsonBytes), tampered: dec.result === "tampered"};
+      if(dec.result === "ok") return res;
+      if(!fallback) fallback = res;
+    }
+    if(fallback) return fallback;
+    throw new Error("암호화된 메일 데이터를 복호화하지 못했습니다. 문자열이 잘렸거나, 게임 빌드의 암호화 키(K1/K2)가 뷰어와 다릅니다.");
+  }
+
   // 암호화 세이브(1.1.62+ 파일 내용 그대로) — 본문에 섞여 있어도 토큰만 추출
   const me = s.match(new RegExp(ENC_MARK + "([A-Za-z0-9+/=\\s]+)"));
   if(me){
-    const dec = await encDecrypt(ENC_MARK + me[1]);
-    if(dec.result === "corrupt")
-      throw new Error("암호화 세이브를 복호화하지 못했습니다. 문자열이 잘렸거나, 게임 빌드의 암호화 키(K1/K2)가 뷰어와 다릅니다.");
-    // plain = 평문 Base64(JSON)
-    const b64p = dec.plain.replace(/\s+/g,"");
-    try{
-      const json = b64ToUtf8(b64p);
-      o = tryParseJson(json);
-      if(o) return {data:o, how:"암호화 해제(ENC1) → JSON", backup,
-                    json, b64:normalizeB64(b64p),
-                    tampered: dec.result === "tampered"};
-    }catch(e){}
-    throw new Error("복호화는 됐지만 내용이 세이브(Base64 JSON) 형식이 아닙니다.");
+    let fallback = null;
+    for(const tok of tokenCandidates(me[1])){
+      const dec = await encDecrypt(ENC_MARK + tok);
+      if(dec.result === "corrupt") continue;
+      const b64p = dec.plain.replace(/\s+/g,"");   // plain = 평문 Base64(JSON)
+      try{
+        o = tryParseJson(b64ToUtf8(b64p));
+        if(!o) continue;
+        const res = {data:o, how:"암호화 해제(ENC1) → JSON", backup,
+                     json:b64ToUtf8(b64p), b64:normalizeB64(b64p), tampered: dec.result === "tampered"};
+        if(dec.result === "ok") return res;
+        if(!fallback) fallback = res;
+      }catch(e){}
+    }
+    if(fallback) return fallback;
+    throw new Error("암호화 세이브를 복호화하지 못했습니다. 문자열이 잘렸거나, 게임 빌드의 암호화 키(K1/K2)가 뷰어와 다릅니다.");
   }
 
   const m = s.match(new RegExp(GZ_MARK + "([A-Za-z0-9_\\-+/=\\s]+)"));
   if(m){
-    const token = m[1].replace(/\s+/g,"");
-    const jsonBytes = await gunzipToBytes(b64ToBytes(token));
-    const json = new TextDecoder("utf-8").decode(jsonBytes);
-    o = tryParseJson(json);
-    if(o) return {data:o, how:"압축 해제(gzip) → JSON", backup, json, b64:bytesToB64(jsonBytes)};
+    let lastErr = null;
+    for(const tok of tokenCandidates(m[1])){
+      try{
+        const jsonBytes = await gunzipToBytes(b64ToBytes(tok));
+        const json = new TextDecoder("utf-8").decode(jsonBytes);
+        o = tryParseJson(json);
+        if(o) return {data:o, how:"압축 해제(gzip) → JSON", backup, json, b64:bytesToB64(jsonBytes)};
+      }catch(e){ lastErr = e; }
+    }
+    if(lastErr) throw lastErr;
     return null;
   }
 
