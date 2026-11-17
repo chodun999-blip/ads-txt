@@ -1332,6 +1332,15 @@ function cardPet(d){
   );
 }
 
+/* 비소모성 인앱 상품 — Shop_manager 의 상품 등록(ProductType.NonConsumable) / AlreadyOwned 와 동일하게 유지할 것
+     플래그로 저장 : 광고 제거 2종, 팩 4종, 자동다이아 2종 (cardShop 의 packs 표)
+     스킨 해금으로 저장 : 스페셜 스킨 (아래 INAPP_SKINS. skinNum = Skin_manager.SPECIAL_START(77) + 순번,
+                          Shop_manager.SkinSpecial_ProductIds 에 상품이 늘면 여기도 추가)
+   VIP·Luxury 패스는 시즌제(소모성)지만 보유 상태를 같이 보여준다 */
+const INAPP_SKINS = [
+  { name:"스페셜 스킨 1 (블랙팬서)", skinNum:77 }
+];
+
 function cardShop(d){
   const packs = [
     ["VIP 패스", d.Mission_is_Vip, 'Mission_is_Vip'],
@@ -1348,6 +1357,13 @@ function cardShop(d){
   let packTable = '<table class="pack">';
   packs.forEach(p=>{
     packTable += "<tr><td>"+esc(p[0])+"</td><td>"+(has(d,p[2])?fmtBool(p[1],"보유","미보유"):absentHtml())+"</td></tr>";
+  });
+  // 플래그가 아니라 스킨 해금(Skin_Unlock[스킨 번호])으로 저장되는 비소모성 상품
+  //   배열이 그 번호보다 짧으면 스킨이 추가되기 전 버전의 세이브
+  INAPP_SKINS.forEach(sk=>{
+    const arr = d.Skin_Unlock;
+    const st = (Array.isArray(arr) && arr.length > sk.skinNum) ? fmtBool(arr[sk.skinNum],"보유","미보유") : absentHtml();
+    packTable += "<tr><td>"+esc(sk.name)+"</td><td>"+st+"</td></tr>";
   });
   packTable += "</table>";
 
