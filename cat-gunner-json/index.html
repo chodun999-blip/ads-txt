@@ -375,7 +375,8 @@ const FIELD_TZ = {
   AD_Daily_Gun_LastDate:'local', AD_Daily_Pet_LastDate:'local',
   Coupang_LastGet_Date:'local', Adventure_AD_Reduce_LastDate:'local',
   StarGemPack_Sale_End:'local',
-  InstallDate:'utc', SegmentPost_LastDate:'utc'
+  InstallDate:'utc', SegmentPost_LastDate:'utc',
+  CloudSaveTime:'utc', CloudLoad_Time:'utc'
 };
 
 /* 구매 상품 이력 매핑 — Shop_manager.ItemIdxFromProductId 와 동일하게 유지할 것 */
@@ -1187,7 +1188,7 @@ function cardBasic(d){
   return card("기본 정보",
     row("게임 버전", (ERA.version ? esc(ERA.version) : noneHtml("-")) + sub(ERA.label)) +
     row("마지막 저장", field(d,'LastSaveTime', v=>fmtStamp(v,'LastSaveTime'))) +
-    row("마지막 클라우드 저장", field(d,'CloudSaveTime', v=> v ? esc(v)+sub("원본 그대로") : noneHtml())) +
+    row("마지막 클라우드 저장", field(d,'CloudSaveTime', v=>fmtStamp(v,'CloudSaveTime'))) +
     row("총 플레이 시간", field(d,'TotalPlayTime', fmtPlayTime)) +
     row("리뷰 작성", field(d,'is_reviewed', v=>fmtBool(v))) +
     row("튜토리얼", field(d,'TutorialCleared', v=>fmtBool(v,"완료","미완료"))) +
@@ -1381,6 +1382,42 @@ function cardShop(d){
     + row("다이아 첫구매 2배", field(d,'Dia_FirstBuy_Used', v=>Array.isArray(v)? esc(countTrue(v)+"종 사용") : noneHtml("-")))
     + row("리딤코드 사용", redeemUsedHtml(d))
     + '</div>' + packTable + histHtml + txnHtml + '</div>';
+}
+
+/* 클라우드 불러오기 기록 — SaveData.CloudLoad_Logs (CloudLoadLog { SaveTime, LoadTime }, 둘 다 UTC) 와 동일하게 유지할 것
+   불러오기는 로컬 세이브를 통째로 덮어쓰므로, 덮어쓰기 직전에 클라가 기록을 심는다. 최근 3회, 오래된 순 */
+/* 불러오기 1건에서 사라진 구매 — Lost_Count(실제 차이), Lost_History / Lost_History_Dates(최근 10건까지) */
+function cloudLostHtml(g){
+  if(!has(g,'Lost_Count') && !has(g,'Lost_History')) return '<span class="sub-note">사라진 구매: 이 버전에 없는 항목</span>';
+  const hist = Array.isArray(g.Lost_History) ? g.Lost_History : [];
+  const dates = Array.isArray(g.Lost_History_Dates) ? g.Lost_History_Dates : [];
+  const cnt = Math.max(+g.Lost_Count||0, hist.length);
+  if(!cnt) return "사라진 구매 "+okHtml("없음");
+  let html = "사라진 구매 "+badHtml(cnt+"건");
+  if(cnt > hist.length) html += sub(hist.length ? "목록은 최근 "+hist.length+"건만 보관" : "목록 없음 — 결제 횟수만 차이 (이력 기능 이전 구매분)");
+  if(hist.length) html += '<div class="txn-list">' + hist.map((i,n)=>(n+1)+". "+esc(itemName(i))
+      + (dates[n] ? " — "+fmtStamp(dates[n],'CloudLoad_Time') : sub("시각 기록 없음"))).join("<br>") + '</div>';
+  return html;
+}
+function cardCloudLoad(d){
+  const title = "클라우드 불러오기 기록";
+  if(!has(d,'CloudLoad_Logs')) return card(title, row("불러오기", absentHtml()));
+  const logs = Array.isArray(d.CloudLoad_Logs) ? d.CloudLoad_Logs : [];
+  if(!logs.length) return card(title, row("불러오기", noneHtml("기록 없음")+sub("기록 기능 추가 이전의 불러오기는 포함되지 않습니다")));
+  let rows = "";
+  // 최근 것이 위로 오게 뒤집어서 표시
+  logs.slice().reverse().forEach((g,i)=>{
+    g = g || {};
+    let gap = "";
+    const st = absDate(g.SaveTime,'CloudLoad_Time'), lt = absDate(g.LoadTime,'CloudLoad_Time');
+    if(st && lt) gap = sub("저장 후 "+dur((lt.getTime()-st.getTime())/1000)+" 뒤에 불러옴");
+    rows += row(i===0 ? "최근 불러오기" : "이전 불러오기 "+i,
+      "불러온 시각 "+fmtStamp(g.LoadTime,'CloudLoad_Time')
+      + "<br>저장 시각 "+fmtStamp(g.SaveTime,'CloudLoad_Time')+gap
+      + "<br>"+cloudLostHtml(g));
+  });
+  return '<div class="card"><h2>'+esc(title)+'</h2><div class="kv">'+rows+'</div>'
+    + '<div class="card-note">최근 3회까지 보관합니다. 저장 시각과 불러온 시각 사이에 한 구매·진행은 불러오기로 사라집니다. 클라이언트 세이브에 남긴 참고 기록이므로 보상 재지급은 스토어 영수증(주문번호)으로 확인하세요.</div></div>';
 }
 
 function cardTimedPacks(d){
@@ -1647,6 +1684,7 @@ function render(d){
     safeCard(()=>cardPet(d), "펫"),
     safeCard(()=>cardFish(d), "생선 인벤토리"),
     safeCard(()=>cardShop(d), "상점 · 구매 내역"),
+    safeCard(()=>cardCloudLoad(d), "클라우드 불러오기 기록"),
     safeCard(()=>cardTimedPacks(d), "기간제 패키지"),
     safeCard(()=>cardRaid(d), "레이드"),
     safeCard(()=>cardSeason(d), "시즌패스 · 미션"),
