@@ -880,16 +880,38 @@ const REASON_LABEL = {
 function reasonLabel(r){ const k=reasonKind(r); return REASON_LABEL[k] || ""; }
 
 /* 메모리 변조 근거 — 클라 Gamemanager.OnCheatDetected 가 사유 뒤에 붙인다
-     "obscured_memory;m=실제값,미끼값,해시유효(1/0)"   (뒤에 ";load_inherit" 같은 꼬리가 더 붙을 수 있음)
+     "obscured_memory;m=실제값,미끼값,해시유효(1/0),변수번호들"   (뒤에 ";load_inherit" 같은 꼬리가 더 붙을 수 있음)
+     변수번호들 : 감지 순간에 값이 감지된 값과 같았던 보호 변수의 번호를 "." 로 이은 것 (예 "0.4"). 없으면 빈 칸.
+                  감지기가 값만 넘겨주므로 "값이 같은 변수 = 후보" 이다. 번호 → 이름은 아래 MEMORY_VARS
    새 세이브 필드 없이 사유 문자열에만 들어가므로 걸린 유저의 세이브에만 있다.
    기록 기능 추가 이전에 판정된 세이브에는 "m=" 이 없다 → null
      해시유효 1 : 암호화된 값은 멀쩡하고 미끼값(메모리에 평문으로 둔 값)만 바뀜
      해시유효 0 : 암호화된 값이나 키가 직접 바뀜 → 실제값은 깨진 복호화 결과, 미끼값이 원래 값일 수 있음 */
+/* 보호 변수 번호 → 이름 — 클라 Gamemanager.Evidence_Vars 의 번호와 동일하게 유지할 것 (끝에만 추가) */
+const MEMORY_VARS = [
+  "다이아", "유료 다이아", "다이아 획득 누계 (저장값 = 실제의 3배)", "다이아 사용 누계 (저장값 = 실제의 3배)",
+  "펫 젬", "강화석", "오프라인 검사 실패 누적", "시간 경고 횟수",
+  "메인 스테이지 (현재)", "메인 웨이브 (현재)", "최고 스테이지 값",
+  "보스 스테이지", "사냥 웨이브", "사냥 레벨",
+  "슈퍼루비 업그레이드 레벨", "환생 업그레이드 레벨 (목록 중 하나)", "업그레이드 레벨 (목록 중 하나)",
+  "초보자 랭킹 1등컷", "초보자 랭킹 내 점수", "초보자 랭킹 확정 순위"
+];
 function memoryEvidence(reason){
   const m = String(reason||"").match(/(?:^|;)m=([^;]*)/);
   if(!m) return null;
   const p = m[1].split(",");
-  return { real:(p[0]||""), fake:(p[1]||""), hashValid:(p[2]==="1") };
+  // vars : null = 변수 후보 기록이 없는 형식 / [] = 값이 같은 변수가 없었음
+  const vars = p.length > 3
+    ? p[3].split(".").filter(x=>x!=="").map(x=>MEMORY_VARS[+x] || ("알 수 없는 변수 #"+x))
+    : null;
+  return { real:(p[0]||""), fake:(p[1]||""), hashValid:(p[2]==="1"), vars:vars };
+}
+function memoryVarsText(ev){
+  if(!ev || ev.vars === null) return "변조된 변수: 기록 없음";
+  if(!ev.vars.length) return "변조된 변수: 값이 같은 보호 변수 없음";
+  return ev.vars.length === 1
+    ? "변조된 변수: "+ev.vars[0]+" (감지 당시 값이 같았던 유일한 변수)"
+    : "변조된 변수 후보 "+ev.vars.length+"개 (감지 당시 값이 같았던 변수): "+ev.vars.join(" · ");
 }
 function memoryEvidenceText(ev){
   if(!ev) return "";
@@ -906,7 +928,7 @@ function memoryEvidenceHtml(reason){
   const note = ev.hashValid
     ? "미끼값(메모리에 평문으로 둔 값)이 바뀜 — 메모리 검색 도구로 숫자를 찾아 고친 형태. 게임에 쓰이는 실제 값은 바뀌지 않음"
     : "암호화된 값이나 키가 직접 바뀜 (해시 불일치). 미끼값이 0 이 아니면 그 값이 원래 값일 가능성이 높음";
-  return head + sub(note) + '<br><span class="sub-note">'+esc("어떤 변수인지는 기록되지 않음 — 값으로 추정 (다이아 · 강화석 · 스테이지 등)")+'</span>';
+  return head + sub(note) + '<br>'+esc(memoryVarsText(ev));
 }
 
 function kindLabel(k){
@@ -989,6 +1011,7 @@ function verdict(a, d){
         title = "메모리 변조 감지";
         const ev = memoryEvidence(a.reason);
         L.push(ev ? "감지 당시 "+memoryEvidenceText(ev) : "감지 당시 값은 기록되지 않음 (근거 값 기록 기능 추가 이전의 판정)");
+        if(ev) L.push(memoryVarsText(ev));
         break;
       }
       case "future":
