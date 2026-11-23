@@ -1529,16 +1529,18 @@ function cardShop(d){
           const t = raw ? " — "+(histMin ? fmtUtcMin(raw) : fmtStamp(raw,'PurchaseHistory_Dates')) : sub("시각 기록 없음");
           return (n+1)+". "+esc(itemName(i))+t;
         }).join("<br>") + '</div>';
-    // 결제 금액 합계 (USD 정가, ITEM_PRICES) — 이력에 남아 있는 구매만 더한 참고값
-    histHtml += '<div class="hist-total"><span>결제 금액 합계</span><b>'+esc(fmtUsd(priceSum(hist)))+'</b></div>';
   }else if(hist){
     histHtml += '<div class="txn-list">'+noneHtml("기록 없음")+sub("이력 기능 추가 이전 구매는 포함되지 않습니다")+'</div>';
   }else{
     histHtml += '<div class="txn-list">'+absentHtml()+sub("PurchaseHistory 필드가 없는 버전의 세이브입니다")+'</div>';
   }
   histHtml += '</details>';
+  // 결제 금액 합계 (USD 정가, ITEM_PRICES) — 이력에 남아 있는 구매만 더한 참고값
+  //   이력을 접어도 보이도록 <details> 안이 아니라 바로 아래에 둔다
+  if(hist && hist.length)
+    histHtml += '<div class="hist-total"><span>결제 금액 합계</span><b>'+esc(fmtUsd(priceSum(hist)))+'</b></div>';
 
-  const txns = Array.isArray(d.ProcessedTxnIds) ? d.ProcessedTxnIds : [];
+  const txns =Array.isArray(d.ProcessedTxnIds) ? d.ProcessedTxnIds : [];
   const txnHtml = '<details><summary>처리된 결제 트랜잭션 '+txns.length+'건 (최근순 최대 50개 보관)</summary><div class="txn-list">'
     + (txns.length ? txns.map(t=>esc(t)).join("<br>") : noneHtml("없음")) + "</div></details>";
 
