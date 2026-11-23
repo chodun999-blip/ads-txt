@@ -114,6 +114,8 @@
   details{margin-top:10px;}
   details summary{cursor:pointer; font-size:13px; font-weight:700; color:var(--sub);}
   .txn-list{margin-top:8px; max-height:220px; overflow:auto; background:#FAFBFC; border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-family:var(--mono); font-size:11px; line-height:1.8; word-break:break-all;}
+  .hist-total{display:flex; justify-content:space-between; align-items:baseline; margin-top:10px; padding:10px 4px 0; border-top:1px solid var(--line); font-size:13px; font-weight:700;}
+  .hist-total b{font-family:var(--mono); font-size:16px; font-weight:800; color:var(--accent);}
   pre.raw{margin-top:8px; max-height:420px; overflow:auto; background:#FAFBFC; border:1px solid var(--line); border-radius:8px; padding:12px; font-family:var(--mono); font-size:11px; line-height:1.6;}
   .raw-tools{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;}
   .raw-tools button.ghost{padding:6px 12px; font-size:12px; color:var(--ink);}
@@ -407,6 +409,47 @@ const ITEM_NAMES = {
   67:"낚시왕 3단계", 68:"낚시왕 6단계", 69:"낚시왕 9단계", 70:"낚시왕 12단계", 71:"낚시왕 15단계"
 };
 function itemName(idx){ return ITEM_NAMES[idx] || ("알 수 없는 상품 #"+idx); }
+
+/* 상품 가격표 (USD 정가) — 로그 시트 '인앱 시트' 의 idx / price 열과 동일하게 유지할 것
+   번호는 ITEM_NAMES 와 같은 itemidx (줄 배치도 ITEM_NAMES 와 같게 둠). 31~35(다이아 첫 구매 2배)는 1~5 와 같은 가격
+   스토어 정가라 현지 통화 결제·세금·환불은 반영되지 않는다 (참고용) */
+const ITEM_PRICES = {
+  1:1.99, 2:4.99, 3:9.99, 4:19.99, 5:49.99,
+  6:2.99, 7:9.99, 8:7.99, 9:7.99,
+  10:49.99, 11:5.99, 12:7.99,
+  13:0.99, 14:3.99, 15:7.99, 16:23.99,
+  17:3.99, 18:7.99, 22:23.99,
+  19:14.99, 20:7.99, 21:1.99,
+  23:0.99, 24:4.99, 25:9.99, 26:19.99, 27:39.99,
+  28:4.99, 29:19.99, 30:34.99,
+  31:1.99, 32:4.99,
+  33:9.99, 34:19.99,
+  35:49.99,
+  36:3.99, 37:8.99, 38:5.99,
+  39:0.99, 40:0.99, 41:2.99, 42:4.99,
+  43:4.99, 44:3.99,
+  45:14.99, 46:2.99,
+  47:0.99, 48:4.99, 49:9.99,
+  50:19.99, 51:39.99,
+  52:4.99, 53:19.99, 54:34.99,
+  55:21.99, 56:5.99,
+  57:1.99, 58:3.99, 59:5.99,
+  60:7.99, 61:3.99,
+  62:7.99, 63:15.99,
+  64:3.99, 65:14.99, 66:19.99,
+  67:3.99, 68:6.99, 69:12.99, 70:18.99, 71:22.99
+};
+/* 상품 번호 목록의 정가 합계 (센트). 소수 오차를 피하려고 센트 단위로 더한다
+   가격표에 없는 번호는 건너뛴다 */
+function priceSum(list){
+  let cents = 0;
+  list.forEach(i=>{
+    const p = ITEM_PRICES[i];
+    if(typeof p === 'number') cents += Math.round(p*100);
+  });
+  return cents;
+}
+function fmtUsd(cents){ return "$"+(cents/100).toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2}); }
 
 /* 확정강화권 종류 — StarUpgrade_manager.Ticket_MaxLv { 14, 17, 20 } 순서
    (SlotTicket 월간 상점 상품 번호 0~2 와 같은 순서) */
@@ -1445,6 +1488,8 @@ function cardShop(d){
           const t = raw ? " — "+(histMin ? fmtUtcMin(raw) : fmtStamp(raw,'PurchaseHistory_Dates')) : sub("시각 기록 없음");
           return (n+1)+". "+esc(itemName(i))+t;
         }).join("<br>") + '</div>';
+    // 결제 금액 합계 (USD 정가, ITEM_PRICES) — 이력에 남아 있는 구매만 더한 참고값
+    histHtml += '<div class="hist-total"><span>결제 금액 합계</span><b>'+esc(fmtUsd(priceSum(hist)))+'</b></div>';
   }else if(hist){
     histHtml += '<div class="txn-list">'+noneHtml("기록 없음")+sub("이력 기능 추가 이전 구매는 포함되지 않습니다")+'</div>';
   }else{
