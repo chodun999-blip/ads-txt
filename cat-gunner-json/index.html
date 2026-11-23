@@ -1513,7 +1513,7 @@ function cardShop(d){
   //   둘 다 이력의 '뒤쪽'과 대응 → 리스트가 짧으면 앞쪽(옛 구매)은 시각 기록 없음
   const histMin = Array.isArray(d.PurchaseHistory_UtcMin) ? d.PurchaseHistory_UtcMin : null;
   const histDates = histMin || (Array.isArray(d.PurchaseHistory_Dates) ? d.PurchaseHistory_Dates : []);
-  let histHtml = '<details open><summary>구매 상품 이력 '+(hist? hist.length+"건" : "(이 버전에 없음)")+'</summary>';
+  let histHtml = '<details><summary>구매 상품 이력 '+(hist? hist.length+"건" : "(이 버전에 없음)")+'</summary>';
   if(hist && hist.length){
     const cnt = {};
     hist.forEach(i=>{ cnt[i]=(cnt[i]||0)+1; });
