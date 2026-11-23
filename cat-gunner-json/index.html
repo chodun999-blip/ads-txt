@@ -44,6 +44,21 @@
   #decode-note{font-size:12px; color:var(--sub);}
   #error-box{display:none; margin-top:10px; background:var(--danger-soft); color:var(--danger); border-radius:8px; padding:10px 12px; font-size:13px; font-weight:600;}
 
+  /* ── PlayFab 닉네임 검색 ── */
+  .pf-row{display:flex; align-items:center; gap:10px; margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); flex-wrap:wrap;}
+  .pf-row input[type=text], #pf-settings input[type=text], #pf-settings input[type=password]{border:1px solid var(--line); border-radius:8px; padding:9px 12px; font-size:13px; color:var(--ink); background:#FAFBFC; font-family:inherit;}
+  #pf-nick{flex:1 1 200px; min-width:160px; max-width:320px;}
+  #pf-note{font-size:12px; color:var(--sub);}
+  #pf-settings{display:none; margin-top:10px; background:#FAFBFC; border:1px solid var(--line); border-radius:8px; padding:12px;}
+  #pf-settings .pf-fields{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  #pf-settings input[type=text], #pf-settings input[type=password]{background:#fff;}
+  #pf-title{width:130px;}
+  #pf-key{flex:1 1 240px; min-width:200px;}
+  #pf-settings label.pf-remember{font-size:12px; color:var(--sub); display:inline-flex; align-items:center; gap:5px; cursor:pointer;}
+  #pf-state{font-size:12px; color:var(--sub);}
+  .pf-help{font-size:12px; color:var(--sub); margin-top:8px; line-height:1.6;}
+  #pf-result{display:none; margin-top:10px; border:1px solid var(--line); border-radius:8px; padding:12px 14px;}
+
   /* ── 상단 도구 막대 ── */
 
   .legend{display:flex; flex-direction:column; gap:3px; font-size:12px; color:var(--sub); margin-bottom:20px; padding-left:2px;}
@@ -142,6 +157,32 @@
       <button class="ghost" onclick="clearAll()">초기화</button>
       <span id="decode-note"></span>
     </div>
+    <!-- PlayFab 닉네임 검색 : 스테이지 랭킹 상위 100위 유저가 올린 세이브(Player Data)를 가져온다 -->
+    <div class="pf-row">
+      <input type="text" id="pf-nick" placeholder="PlayFab 닉네임으로 세이브 가져오기"
+        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <button class="primary" onclick="pfSearch()">닉네임 검색</button>
+      <button class="ghost" onclick="pfToggleSettings()">PlayFab 키 설정</button>
+      <span id="pf-note"></span>
+    </div>
+    <div id="pf-settings">
+      <div class="pf-fields">
+        <input type="text" id="pf-title" placeholder="Title ID"
+          autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+        <input type="password" id="pf-key" placeholder="비밀 키 (Secret Key)" autocomplete="new-password">
+        <label class="pf-remember"><input type="checkbox" id="pf-remember" checked> 이 브라우저에 저장</label>
+        <button class="ghost" onclick="pfSaveSettings()">저장</button>
+        <button class="ghost" onclick="pfClearSettings()">키 지우기</button>
+        <span id="pf-state"></span>
+      </div>
+      <div class="pf-help">
+        Title ID 와 비밀 키는 이 페이지 코드에 들어 있지 않고, 입력한 브라우저에만 보관되며 조회할 때 PlayFab 서버로만 전송됩니다.
+        "이 브라우저에 저장"을 끄면 이 탭을 닫거나 새로고침할 때 사라집니다.<br>
+        뷰어 전용 키를 따로 발급하고, 발급 화면의 API allowlist 에서 Admin 의 <b>GetUserAccountInfo</b> · <b>GetUserData</b> 두 개만 허용해 두세요.
+        공용 PC 에서는 저장하지 마세요. (PlayFab Game Manager → Settings → Secret Keys → New secret key)
+      </div>
+    </div>
+    <div id="pf-result"></div>
     <div id="error-box"></div>
   </div>
 
@@ -1847,10 +1888,12 @@ function badge(label, cls){ return '<span class="badge '+(cls||"")+'"><span clas
 /* ═══════════════════════════════════════════════════════════════
    입출력
    ═══════════════════════════════════════════════════════════════ */
-async function analyze(){
+async function analyze(fromPf){
   const errBox = document.getElementById("error-box");
   const note = document.getElementById("decode-note");
   errBox.style.display="none"; note.textContent="";
+  // 직접 붙여넣은 세이브를 분석할 때는 앞서 닉네임으로 찾은 계정 정보를 치운다 (다른 유저 것으로 보이지 않게)
+  if(fromPf !== true) pfHideResult();
   const raw = document.getElementById("input").value;
   if(!raw.trim()){ showError("데이터를 붙여넣은 뒤 분석하기를 눌러 주세요."); return; }
 
@@ -1947,7 +1990,13 @@ function showError(msg){
   document.getElementById("result").style.display = "none";
   document.getElementById("summary-strip").style.display = "none";
 }
-function clearAll(){
+function clearAll(keepPf){
+  // keepPf : 닉네임 검색이 스스로 화면을 비울 때 (검색어와 계정 정보는 남긴다)
+  if(keepPf !== true){
+    document.getElementById("pf-nick").value = "";
+    document.getElementById("pf-note").textContent = "";
+    pfHideResult();
+  }
   document.getElementById("input").value = "";
   document.getElementById("result").style.display = "none";
   document.getElementById("summary-strip").style.display = "none";
@@ -1961,6 +2010,177 @@ function clearAll(){
   document.getElementById("amnesty-diff").innerHTML = "";
   LAST_B64=""; LAST_ENC=""; LAST_JSON=""; LAST_DATA=null; AMNESTY_B64=""; AMNESTY_ENC=""; ERA=null;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   PlayFab 닉네임 검색
+   닉네임 → 계정(Admin/GetUserAccountInfo) → Player Data(Admin/GetUserData) 순으로 조회한다.
+   Player Data 키는 Rank_manager.SNAPSHOT_KEY_SAVE / SNAPSHOT_KEY_INFO 와 동일하게 유지할 것
+     (스테이지 랭킹 상위 100위 유저만 하루 1회 올린다 → 그 외 유저는 계정만 나오고 세이브는 없음)
+   다른 유저의 비공개 데이터라 타이틀 비밀 키가 필요하다.
+   ★ 비밀 키와 Title ID 는 이 파일에 절대 적지 않는다 (공개 저장소). 입력한 브라우저에만 보관한다.
+   ═══════════════════════════════════════════════════════════════ */
+const PF_KEY_SAVE = "StageTop100_Save";   // "GZ1:..." 문의 메일과 같은 압축 포맷 → decodeInput 이 그대로 읽는다
+const PF_KEY_INFO = "StageTop100_Info";   // 한 줄 요약 (업로드 시각 / 스테이지 등)
+const PF_LS_TITLE = "cg_pf_title", PF_LS_KEY = "cg_pf_key";
+// Title ID 는 조회 주소(https://{Title ID}.playfabapi.com)에 들어간다 → 영문·숫자만 허용해 키가 다른 주소로 나가지 않게 한다
+const PF_TITLE_RE = /^[A-Za-z0-9]{1,16}$/;
+let PF_MEM = null;      // "이 브라우저에 저장"을 끈 경우 : 이 탭에서만 유지
+let PF_BUSY = false;
+
+function pfStored(){
+  try{ return { title: localStorage.getItem(PF_LS_TITLE)||"", key: localStorage.getItem(PF_LS_KEY)||"" }; }
+  catch(e){ return { title:"", key:"" }; }
+}
+function pfConfig(){ return PF_MEM || pfStored(); }
+function pfSetState(text, bad){
+  const s = document.getElementById("pf-state");
+  s.textContent = text || "";
+  s.style.color = bad ? "var(--danger)" : "";
+}
+function pfHideResult(){
+  const box = document.getElementById("pf-result");
+  box.style.display = "none"; box.innerHTML = "";
+}
+function pfShowSettings(show){
+  document.getElementById("pf-settings").style.display = show ? "block" : "none";
+  if(!show) return;
+  const cfg = pfConfig();
+  document.getElementById("pf-title").value = cfg.title;
+  const key = document.getElementById("pf-key");
+  key.value = "";   // 저장된 키는 화면에 다시 채우지 않는다
+  key.placeholder = cfg.key ? "비밀 키 저장됨 — 바꿀 때만 새로 입력" : "비밀 키 (Secret Key)";
+  pfSetState(cfg.key ? "키가 저장돼 있습니다" : "저장된 키가 없습니다");
+}
+function pfToggleSettings(){
+  pfShowSettings(document.getElementById("pf-settings").style.display !== "block");
+}
+function pfSaveSettings(){
+  const title = document.getElementById("pf-title").value.trim();
+  const keyEl = document.getElementById("pf-key");
+  const key = keyEl.value.trim() || pfConfig().key;   // 비워 두면 저장된 키를 그대로 쓴다
+  if(!PF_TITLE_RE.test(title)){ pfSetState("Title ID 는 영문·숫자만 입력해 주세요.", true); return; }
+  if(!key){ pfSetState("비밀 키를 입력해 주세요.", true); return; }
+  const remember = document.getElementById("pf-remember").checked;
+  let saved = false;
+  try{
+    if(remember){ localStorage.setItem(PF_LS_TITLE, title); localStorage.setItem(PF_LS_KEY, key); saved = true; }
+    else{ localStorage.removeItem(PF_LS_TITLE); localStorage.removeItem(PF_LS_KEY); }
+  }catch(e){}
+  PF_MEM = saved ? null : { title:title, key:key };
+  keyEl.value = "";
+  keyEl.placeholder = "비밀 키 저장됨 — 바꿀 때만 새로 입력";
+  pfSetState(saved ? "이 브라우저에 저장했습니다"
+    : (remember ? "브라우저 저장소를 쓸 수 없어 이 탭에서만 유지됩니다" : "이 탭에서만 유지됩니다 (닫으면 사라짐)"));
+}
+function pfClearSettings(){
+  PF_MEM = null;
+  try{ localStorage.removeItem(PF_LS_TITLE); localStorage.removeItem(PF_LS_KEY); }catch(e){}
+  document.getElementById("pf-title").value = "";
+  const key = document.getElementById("pf-key");
+  key.value = ""; key.placeholder = "비밀 키 (Secret Key)";
+  pfSetState("저장된 Title ID 와 키를 지웠습니다");
+}
+
+/* PlayFab Admin API 호출. 실패하면 e.pf = { network | status, error } 를 붙여 던진다 */
+async function pfCall(cfg, api, body){
+  if(!PF_TITLE_RE.test(cfg.title)){ const e = new Error("Title ID"); e.pf = { config:true }; throw e; }
+  let res;
+  try{
+    res = await fetch("https://"+cfg.title+".playfabapi.com/Admin/"+api, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "X-SecretKey":cfg.key },
+      body:JSON.stringify(body),
+      cache:"no-store", credentials:"omit", referrerPolicy:"no-referrer"
+    });
+  }catch(err){ const e = new Error("network"); e.pf = { network:true }; throw e; }
+  let j = null;
+  try{ j = await res.json(); }catch(err){}
+  if(!res.ok || !j || j.code !== 200){
+    const e = new Error((j && j.errorMessage) || "");
+    e.pf = { status:res.status, error:(j && j.error) || "" };
+    throw e;
+  }
+  return j.data || {};
+}
+function pfErrorText(e, nick){
+  const p = e && e.pf;
+  if(!p) return "PlayFab 조회 중 오류가 발생했습니다: " + ((e && e.message) || e);
+  if(p.config) return "Title ID 가 올바르지 않습니다. 'PlayFab 키 설정'에서 다시 입력해 주세요.";
+  if(p.network) return "PlayFab 서버에 연결하지 못했습니다. 인터넷 연결과 Title ID 를 확인해 주세요.";
+  if(p.error === "AccountNotFound")
+    return "닉네임 \""+nick+"\" 인 계정을 찾지 못했습니다. 대소문자·띄어쓰기까지 정확히 입력했는지 확인해 주세요.";
+  const raw = " (PlayFab 응답: " + (p.error || ("HTTP "+p.status)) + (e.message ? " — "+e.message : "") + ")";
+  if(p.status === 401 || p.status === 403) return "비밀 키 또는 Title ID 가 올바르지 않습니다. 'PlayFab 키 설정'을 확인해 주세요." + raw;
+  if(p.status === 429) return "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요." + raw;
+  return "PlayFab 조회에 실패했습니다." + raw;
+}
+function pfDate(s){
+  if(!s) return null;
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+function pfAgo(d){ return dur((Date.now()-d.getTime())/1000)+" 전"; }
+/* 계정 정보 + 세이브 유무 표시. info = UserAccountInfo, save / sum = UserDataRecord { Value, LastUpdated } */
+function pfResultHtml(info, save, sum){
+  const t = info.TitleInfo || {};
+  const created = pfDate(t.Created || info.Created), last = pfDate(t.LastLogin);
+  let rows = row("닉네임", esc(t.DisplayName || "-"))
+    + row("PlayFab ID", esc(info.PlayFabId || "-"))
+    + row("가입", created ? esc(kst(created)) : noneHtml("-"))
+    + row("최근 접속", last ? esc(kst(last)) + sub(pfAgo(last)) : noneHtml("-"));
+  if(typeof t.isBanned === "boolean") rows += row("PlayFab 밴", t.isBanned ? badHtml("밴 상태") : okHtml("아님"));
+  if(save && save.Value){
+    const up = pfDate(save.LastUpdated);
+    rows += row("올라온 세이브", (up ? esc(kst(up)) + sub(pfAgo(up)+" 업로드") : okHtml("있음"))
+      + sub("· 지금 상태가 아니라 업로드 시점의 세이브입니다"));
+  }else{
+    rows += row("올라온 세이브", noneHtml("없음") + sub("스테이지 랭킹 상위 100위 유저만 하루 1회 올라갑니다"));
+  }
+  if(sum && sum.Value) rows += row("업로드 요약", esc(sum.Value));
+  return '<div class="kv">'+rows+'</div>';
+}
+async function pfSearch(){
+  if(PF_BUSY) return;
+  const nick = document.getElementById("pf-nick").value.trim();
+  const note = document.getElementById("pf-note");
+  document.getElementById("error-box").style.display = "none";
+  pfHideResult();
+  if(!nick){ showError("검색할 닉네임을 입력해 주세요."); return; }
+  const cfg = pfConfig();
+  if(!cfg.title || !cfg.key){
+    pfShowSettings(true);
+    showError("PlayFab Title ID 와 비밀 키를 먼저 입력하고 저장해 주세요.");
+    return;
+  }
+  PF_BUSY = true;
+  note.textContent = "PlayFab 조회 중…";
+  try{
+    const acc = await pfCall(cfg, "GetUserAccountInfo", { TitleDisplayName:nick });
+    const info = acc.UserInfo || {};
+    if(!info.PlayFabId) throw new Error("계정 정보를 받지 못했습니다.");
+    const ud = await pfCall(cfg, "GetUserData", { PlayFabId:info.PlayFabId, Keys:[PF_KEY_SAVE, PF_KEY_INFO] });
+    const data = ud.Data || {};
+    const save = data[PF_KEY_SAVE], sum = data[PF_KEY_INFO];
+    const box = document.getElementById("pf-result");
+    // 앞서 보던 세이브가 이 유저 것으로 보이지 않게 먼저 비운다
+    clearAll(true);
+    box.innerHTML = pfResultHtml(info, save, sum);
+    box.style.display = "block";
+    note.textContent = "";
+    if(save && save.Value){
+      document.getElementById("input").value = save.Value;
+      await analyze(true);
+    }
+  }catch(e){
+    showError(pfErrorText(e, nick));
+  }finally{
+    PF_BUSY = false;
+    note.textContent = "";
+  }
+}
+document.getElementById("pf-nick").addEventListener("keydown", function(e){
+  if(e.key === "Enter" && !e.isComposing){ e.preventDefault(); pfSearch(); }   // 한글 조합 중 Enter 는 무시
+});
 
 /* 입력 길이 안내 — 잘림 여부를 원본과 비교할 수 있게 */
 function inputLenNote(raw){
