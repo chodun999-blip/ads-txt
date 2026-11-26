@@ -419,7 +419,8 @@ const FIELD_TZ = {
   Coupang_LastGet_Date:'local', Adventure_AD_Reduce_LastDate:'local',
   StarGemPack_Sale_End:'local',
   InstallDate:'utc', SegmentPost_LastDate:'utc',
-  CloudSaveTime:'utc', CloudLoad_Time:'utc'
+  CloudSaveTime:'utc', CloudLoad_Time:'utc',
+  StartRank_Start_Date:'utc'
 };
 
 /* 구매 상품 이력 매핑 — Shop_manager.ItemIdxFromProductId 와 동일하게 유지할 것 */
@@ -1608,6 +1609,92 @@ function cardCloudLoad(d){
     + '클라이언트 세이브에 남긴 참고 기록이므로 보상 재지급은 스토어 영수증(주문번호)으로 확인하세요.</div></div>';
 }
 
+/* 초보자 랭킹 (스타트 대시) — StartRank_manager.cs 와 동일하게 유지할 것
+     상태        : State_Type 순서 (클라에서 끝에만 추가된다)
+     보상 테이블 : Reward_Tables — [테이블 idx] → 1위 / 2위 / 3위 / 참가상. 시작 시 고정
+     참가상 컷   : Basic_Code — 시작 당시 세그먼트가 러시아(4, 14)면 10-1, 그 외 15-1
+     값 표기     : 1등컷·참가상 컷은 표기값(21-1 = 211), 내 기록은 Stage_Value 형식(21-1 = 200).
+                   달성 비교는 웨이브 단위(스테이지당 5웨이브)로 한다
+     수령 필드   : StartRank_RankReward_Get = 순위 보상 수령(1~3위) / 결과 확인(4위 이하),
+                   StartRank_BasicReward_Get = 참가상 수령. 상태 6(완료)이면 클라가 순위 보상을 수령으로 본다 */
+const STARTRANK_STATES = ["미시작", "시작 판정 대기 (서버 컨피그 미수신)", "대상 아님", "진행 중",
+  "종료 · 순위 미확정 (오프라인 / 랭킹 제한)", "종료 · 순위 확정", "완료 (HUD 종료)"];
+const STARTRANK_HOURS = 72;
+const STARTRANK_REWARDS = {
+  1:["다이아 1,000 · 펫 젬 500 · 스킨", "다이아 500 · 펫 젬 100", "다이아 300", "다이아 150"],
+  2:["다이아 800 · 펫 젬 300 · 스킨", "다이아 300 · 펫 젬 100", "다이아 200", "다이아 100"],
+  3:["다이아 500 · 스킨", "다이아 300", "다이아 150", "다이아 100"]
+};
+function startRankBasicCode(segment){ return (segment===4 || segment===14) ? 101 : 151; }
+function startRankCodeStr(code){ return Math.floor(code/10)+"-"+(code%10); }
+function startRankCodeToWave(code){
+  const st = Math.max(1, Math.floor(code/10)), wv = Math.min(5, Math.max(1, code%10));
+  return (st-1)*5 + (wv-1);
+}
+function startRankScoreToWave(score){
+  if(!(score>0)) return 0;
+  return Math.floor(score/10)*5 + Math.min(score%10, 4);
+}
+function cardStartRank(d){
+  const title = "초보자 랭킹 (스타트 대시)";
+  if(!has(d,'StartRank_State')) return card(title, row("상태", absentHtml()));
+
+  const state = +d.StartRank_State||0;
+  const label = STARTRANK_STATES[state] || ("알 수 없는 상태 #"+state);
+  let rows = row("상태", (state===3 ? okHtml(label) : (state===4||state===5) ? cautHtml(label) : esc(label)) + sub("원본값 "+state));
+  if(state<3 || state>6) return card(title, rows);   // 시작 전 : 나머지 값은 전부 기본값
+
+  const ended = state>=4;
+  const rank = +d.StartRank_FinalRank||0;
+  const seg = +d.StartRank_Segment||0;
+  const tableIdx = +d.StartRank_RewardTable||0;
+  const table = STARTRANK_REWARDS[tableIdx] || STARTRANK_REWARDS[1];   // 미등록 idx 는 클라가 1번 테이블을 쓴다
+  const score = +d.StartRank_UserScore||0;
+
+  /* 기간 : 시작 + 72시간 */
+  let period = fmtStamp(d.StartRank_Start_Date,'StartRank_Start_Date');
+  const start = absDate(d.StartRank_Start_Date,'StartRank_Start_Date');
+  if(start){
+    const end = new Date(start.getTime() + STARTRANK_HOURS*3600e3);
+    const left = (end.getTime() - refNow().getTime())/1000;
+    period += '<br><span class="sub-note">'+esc("종료 "+kst(end)+" · "+(left>0 ? "남은 시간 "+dur(left) : "종료 후 "+dur(-left)+" 경과"))+'</span>';
+  }
+  rows += row("기간", period);
+
+  rows += row("1등컷", field(d,'StartRank_Diff', v=>esc(startRankCodeStr(+v||0))+sub("원본값 "+v)));
+  rows += row("보상 테이블", esc(tableIdx+"번")+sub("시작 세그먼트 "+seg
+      + (STARTRANK_REWARDS[tableIdx] ? "" : " · 뷰어에 없는 idx — 1번 테이블로 표시")));
+  rows += row("내 기록", fmtStageMax(score) + (ended ? sub("종료 시점 기록") : ""));
+  rows += row("확정 순위", rank>0 ? esc(rank+"위") : noneHtml(ended ? "미확정" : "진행 중"));
+
+  /* 순위 보상 : 1~3위 = 수령 여부, 4위 이하 = 결과 확인 여부 */
+  let rankHtml;
+  if(rank<=0) rankHtml = noneHtml("순위 미확정");
+  else if(!has(d,'StartRank_RankReward_Get') && state!==6) rankHtml = absentHtml();
+  else{
+    const got = state===6 || !!d.StartRank_RankReward_Get;
+    rankHtml = rank<=3
+      ? fmtBool(got,"수령","미수령")+sub(rank+"위 보상 : "+table[rank-1])
+      : fmtBool(got,"결과 확인함","결과 미확인")+sub("4위 이하 · 순위 보상 없음");
+  }
+  rows += row("순위 보상", rankHtml);
+
+  /* 참가상 : 순위와 무관. 내 기록이 컷 이상이면 진행 중에도 수령 가능 */
+  const cut = startRankBasicCode(seg);
+  const reached = startRankScoreToWave(score) >= startRankCodeToWave(cut);
+  const basicHtml = !has(d,'StartRank_BasicReward_Get') ? absentHtml()
+    : d.StartRank_BasicReward_Get ? fmtBool(true,"수령")
+    : reached ? cautHtml("달성 · 미수령")
+    : noneHtml(ended ? "미달성 (종료)" : "미달성");
+  rows += row("참가상", basicHtml + sub("컷 "+startRankCodeStr(cut)+(cut!==151 ? " (러시아 세그먼트)" : "")+" · 보상 : "+table[3]));
+
+  rows += row("오픈 팝업", field(d,'StartRank_Popup_Shown', v=>fmtBool(v,"노출됨","미노출")));
+
+  return '<div class="card"><h2>'+esc(title)+'</h2><div class="kv">'+rows+'</div>'
+    + '<div class="card-note">첫 환생 직후 72시간 동안 열리는 랭킹입니다. 순위 보상은 종료 후 순위가 확정돼야 받을 수 있고, '
+    + '참가상은 내 기록이 컷에 닿으면 진행 중에도 받을 수 있습니다. 보상 내용은 시작할 때 고정된 테이블 기준입니다.</div></div>';
+}
+
 function cardTimedPacks(d){
   const names = ["시간 패키지","보상 패키지","편의 패키지"];
   let plus;
@@ -1876,6 +1963,7 @@ function render(d){
     safeCard(()=>cardTimedPacks(d), "기간제 패키지"),
     safeCard(()=>cardRaid(d), "레이드"),
     safeCard(()=>cardSeason(d), "시즌패스 · 미션"),
+    safeCard(()=>cardStartRank(d), "초보자 랭킹 (스타트 대시)"),
     safeCard(()=>cardRebirthFreecash(d), "환생 · 프리캐시"),
     safeCard(()=>cardMisc(d), "기타 콘텐츠")
   ];
